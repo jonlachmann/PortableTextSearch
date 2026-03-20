@@ -1,0 +1,114 @@
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using PortableTextSearch.Configuration;
+using PortableTextSearch.Query;
+using PortableTextSearch.Tests.TestModel;
+
+namespace PortableTextSearch.Tests;
+
+public sealed class ConfigurationTests
+{
+    [Fact]
+    public void HasTextSearch_stores_metadata_for_a_single_field()
+    {
+        using var context = CreateSqliteContext();
+
+        var entityType = context.Model.FindEntityType(typeof(MessageRecipient));
+        var values = entityType!.GetTextSearchProperties();
+
+        values.Should().Contain(["Email", "Name"]);
+    }
+
+    [Fact]
+    public void HasTextSearch_supports_multiple_fields_without_duplicates()
+    {
+        var options = new DbContextOptionsBuilder<DuplicateFieldContext>()
+            .UseSqlite("Data Source=duplicate-fields.db")
+            .UsePortableTextSearch()
+            .Options;
+
+        using var context = new DuplicateFieldContext(options);
+        var entityType = context.Model.FindEntityType(typeof(MessageRecipient));
+
+        entityType!.GetTextSearchProperties().Should().Equal("Email");
+    }
+
+    [Fact]
+    public void HasTextSearch_rejects_complex_expressions()
+    {
+        var action = () => BuildModel<InvalidExpressionContext>(
+            builder => builder.UseSqlite("Data Source=invalid-expression.db"));
+
+        action.Should()
+            .Throw<ArgumentException>()
+            .WithMessage("*simple property access*");
+    }
+
+    [Fact]
+    public void HasTextSearch_rejects_non_string_properties()
+    {
+        var action = () => BuildModel<NonStringPropertyContext>(
+            builder => builder.UseSqlite("Data Source=non-string.db"));
+
+        action.Should()
+            .Throw<ArgumentException>()
+            .WithMessage("*must be of type string*");
+    }
+
+    private static PortableTextSearchTestContext CreateSqliteContext()
+        => BuildContext<PortableTextSearchTestContext>(builder => builder.UseSqlite("Data Source=metadata.db"));
+
+    private static void BuildModel<TContext>(Action<DbContextOptionsBuilder<TContext>> configure)
+        where TContext : DbContext
+    {
+        using var context = BuildContext(configure);
+        _ = context.Model;
+    }
+
+    private static TContext BuildContext<TContext>(
+        Action<DbContextOptionsBuilder<TContext>> configure)
+        where TContext : DbContext
+    {
+        var builder = new DbContextOptionsBuilder<TContext>();
+        configure(builder);
+        builder.UsePortableTextSearch();
+        return (TContext)Activator.CreateInstance(typeof(TContext), builder.Options)!;
+    }
+
+    private sealed class DuplicateFieldContext(DbContextOptions<DuplicateFieldContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<MessageRecipient>(builder =>
+            {
+                builder.HasKey(x => x.Id);
+                builder.HasTextSearch(x => x.Email)
+                    .HasTextSearch(x => x.Email);
+            });
+        }
+    }
+
+    private sealed class InvalidExpressionContext(DbContextOptions<InvalidExpressionContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<MessageRecipient>(builder =>
+            {
+                builder.HasKey(x => x.Id);
+                builder.HasTextSearch(x => x.Email == null ? null : x.Email.Trim());
+            });
+        }
+    }
+
+    private sealed class NonStringPropertyContext(DbContextOptions<NonStringPropertyContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<MessageRecipient>(builder =>
+            {
+                builder.HasKey(x => x.Id);
+                builder.HasTextSearch(x => x.Type);
+            });
+        }
+    }
+}

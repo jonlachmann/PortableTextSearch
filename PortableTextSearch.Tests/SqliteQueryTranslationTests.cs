@@ -1,0 +1,63 @@
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using PortableTextSearch.Functions;
+using PortableTextSearch.Query;
+using PortableTextSearch.Tests.TestModel;
+
+namespace PortableTextSearch.Tests;
+
+public sealed class SqliteQueryTranslationTests
+{
+    [Fact]
+    public void TextContains_translates_to_instr_based_search()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContains(x.Email, "alice"))
+            .ToQueryString();
+
+        sql.Should().Contain(" IN (");
+        sql.Should().Contain("SELECT rowid, \"Email\", \"Name\" FROM \"MessageRecipients_TextSearch\"");
+        sql.Should().Contain("\"Email\" MATCH 'alice'");
+    }
+
+    [Fact]
+    public void TextContains_can_be_composed_with_and_or_logic()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x =>
+                x.Type == 2 &&
+                (EF.Functions.TextContains(x.Email, "alice") || EF.Functions.TextContains(x.Name, "alice")))
+            .ToQueryString();
+
+        sql.Should().Contain("\"Email\" MATCH 'alice'");
+        sql.Should().Contain("\"Name\" MATCH 'alice'");
+        sql.Should().Contain(" OR ");
+        sql.Should().Contain("\"Type\" = 2");
+    }
+
+    [Fact]
+    public void TextContains_remains_server_translatable()
+    {
+        using var context = CreateContext();
+
+        var action = () => context.MessageRecipients
+            .Where(x => EF.Functions.TextContains(x.Email, "alice"))
+            .ToQueryString();
+
+        action.Should().NotThrow();
+    }
+
+    private static PortableTextSearchTestContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<PortableTextSearchTestContext>()
+            .UseSqlite("Data Source=portable-text-search-tests.db")
+            .UsePortableTextSearch()
+            .Options;
+
+        return new PortableTextSearchTestContext(options);
+    }
+}
