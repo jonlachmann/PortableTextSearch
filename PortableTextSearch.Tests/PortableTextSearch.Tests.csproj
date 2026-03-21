@@ -28,4 +28,12 @@
     <ProjectReference Include="..\PortableTextSearch\PortableTextSearch.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="postgres.local.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('postgres.local.json')" />
+    <None Update="postgres.local.json.example" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="postgres.local.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

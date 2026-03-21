@@ -34,3 +34,6 @@ artifacts/
 *.sqlite
 *.sqlite3
 *.log
+
+# Local PostgreSQL test settings
+PortableTextSearch.Tests/postgres.local.json

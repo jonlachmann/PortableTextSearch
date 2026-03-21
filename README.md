@@ -71,6 +71,32 @@ The helper emits SQL for:
 - `CREATE EXTENSION IF NOT EXISTS pg_trgm;`
 - `CREATE INDEX ... USING GIN (... gin_trgm_ops);`
 
+## PostgreSQL integration test
+
+The test suite includes a real PostgreSQL migration-and-query workflow test. It is opt-in so the default suite remains portable, but it no longer depends on run-time environment variables to work in IDE test runners.
+
+Copy [postgres.local.json.example](/Users/jonlachmann/Dev/csharp/EfTextContains/PortableTextSearch.Tests/postgres.local.json.example) to `PortableTextSearch.Tests/postgres.local.json` and provide an admin connection string for a PostgreSQL server where the test user can:
+
+- connect successfully
+- create and drop databases
+- create the `pg_trgm` extension inside the temporary test database
+
+Example:
+
+```json
+{
+  "AdminConnectionString": "Host=localhost;Database=postgres;Username=test;Password=test",
+  "DatabaseNamePrefix": "portable_text_search_tests"
+}
+```
+
+Each test run creates a fresh database with a unique name derived from `DatabaseNamePrefix`, runs the EF migration and query workflow, and drops the database in teardown.
+
+Environment variables are still supported as an override:
+
+- `PORTABLE_TEXT_SEARCH_POSTGRES_ADMIN_CONNECTION`
+- `PORTABLE_TEXT_SEARCH_POSTGRES_DATABASE_NAME`
+
 ## SQLite limitation
 
 SQLite query translation now targets FTS5 directly, and migration helpers generate the virtual table plus synchronization triggers. The current first version assumes the default virtual table naming convention from the migration helper when translating LINQ queries. If you choose a custom SQLite virtual table name, you should treat that as an advanced scenario until model-level naming configuration is added.

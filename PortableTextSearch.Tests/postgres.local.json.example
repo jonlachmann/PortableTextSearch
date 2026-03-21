@@ -1,0 +1,4 @@
+{
+  "AdminConnectionString": "Host=localhost;Database=postgres;Username=test;Password=test",
+  "DatabaseNamePrefix": "portable_text_search_tests"
+}
