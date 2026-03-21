@@ -34,7 +34,6 @@ internal sealed class PortableTextSearchOptionsExtension : IDbContextOptionsExte
         public override void PopulateDebugInfo(IDictionary<string, string> debugInfo)
             => debugInfo[nameof(PortableTextSearchOptionsExtension)] = "1";
 
-        public override bool ShouldUseSameServiceProvider(DbContextOptionsExtensionInfo other)
-            => other is ExtensionInfo;
+        public override bool ShouldUseSameServiceProvider(DbContextOptionsExtensionInfo other) => other is ExtensionInfo;
     }
 }

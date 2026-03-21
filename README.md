@@ -1,13 +1,33 @@
 # PortableTextSearch
 
-PortableTextSearch is a small EF Core 8 extension library that adds a provider-neutral `TextContains` LINQ API for portable substring search across PostgreSQL and SQLite.
+PortableTextSearch is a small EF Core 8 library that adds a provider-neutral `EF.Functions.TextContains(...)` API for substring search on PostgreSQL and SQLite.
 
-## Current provider behavior
+It is designed to keep the application-facing LINQ the same while letting each provider translate to an efficient provider-specific strategy:
 
-- PostgreSQL: translated to `ILIKE '%' || value || '%'`, designed to pair with `pg_trgm` indexes.
-- SQLite: translated to FTS5-backed `MATCH` queries against a synchronized virtual table, with the row filter correlated back to the base table by primary key.
+- PostgreSQL: `ILIKE` with `pg_trgm` indexes
+- SQLite: FTS5 `MATCH` queries against a synchronized virtual table
+
+## Install and register
+
+Register PortableTextSearch on the same `DbContextOptionsBuilder` where the database provider is configured:
+
+```csharp
+optionsBuilder
+    .UseNpgsql(connectionString)
+    .UsePortableTextSearch();
+```
+
+The same registration works for SQLite:
+
+```csharp
+optionsBuilder
+    .UseSqlite("Data Source=portable-text-search.db")
+    .UsePortableTextSearch();
+```
 
 ## Configure searchable fields
+
+Mark mapped string properties with `HasTextSearch(...)` in model configuration:
 
 ```csharp
 protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -18,9 +38,11 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 }
 ```
 
-The configuration stores searchable-field metadata on the EF model and validates that each expression targets a mapped string property.
+The configuration is stored as EF Core model metadata. The expression must be a simple mapped string property access such as `x => x.Email`.
 
 ## Querying
+
+Use the provider-neutral query API through `EF.Functions`:
 
 ```csharp
 var recipients = await context.MessageRecipients
@@ -38,50 +60,98 @@ var recipients = await context.MessageRecipients
     .ToListAsync();
 ```
 
-Register the extension when configuring the context:
+`TextContains` is intended only for EF-translated LINQ. It throws if evaluated client-side.
 
-```csharp
-optionsBuilder
-    .UseNpgsql(connectionString)
-    .UsePortableTextSearch();
+## Provider behavior
+
+### PostgreSQL
+
+`TextContains(field, value)` translates to:
+
+```sql
+field ILIKE '%' || value || '%'
 ```
 
-The same registration works for SQLite:
+This is intended to pair with `pg_trgm` GIN indexes.
 
-```csharp
-optionsBuilder
-    .UseSqlite("Data Source=portable-text-search.db")
-    .UsePortableTextSearch();
-```
-
-## PostgreSQL migration helpers
+Migration helpers:
 
 ```csharp
 protected override void Up(MigrationBuilder migrationBuilder)
 {
     migrationBuilder.EnsurePostgresTrigramExtension();
+
     migrationBuilder.CreatePostgresTextSearchIndex(
         table: "MessageRecipients",
         column: "Email");
+
+    migrationBuilder.CreatePostgresTextSearchIndex(
+        table: "MessageRecipients",
+        column: "Name");
 }
 ```
 
-The helper emits SQL for:
+These helpers emit SQL for:
 
 - `CREATE EXTENSION IF NOT EXISTS pg_trgm;`
 - `CREATE INDEX ... USING GIN (... gin_trgm_ops);`
 
-## PostgreSQL integration test
+### SQLite
 
-The test suite includes a real PostgreSQL migration-and-query workflow test. It is opt-in so the default suite remains portable, but it no longer depends on run-time environment variables to work in IDE test runners.
+`TextContains(field, value)` translates to an FTS5-backed `MATCH` query against a synchronized virtual table created by the SQLite migration helper.
 
-Copy [postgres.local.json.example](/Users/jonlachmann/Dev/csharp/EfTextContains/PortableTextSearch.Tests/postgres.local.json.example) to `PortableTextSearch.Tests/postgres.local.json` and provide an admin connection string for a PostgreSQL server where the test user can:
+Migration helpers:
 
-- connect successfully
-- create and drop databases
-- create the `pg_trgm` extension inside the temporary test database
+```csharp
+protected override void Up(MigrationBuilder migrationBuilder)
+{
+    migrationBuilder.CreateTable(
+        name: "MessageRecipients",
+        columns: table => new
+        {
+            Id = table.Column<int>(type: "INTEGER", nullable: false),
+            Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
+            Name = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true)
+        },
+        constraints: table => table.PrimaryKey("PK_MessageRecipients", x => x.Id));
 
-Example:
+    migrationBuilder.CreateSqliteTextSearchIndex(
+        table: "MessageRecipients",
+        columns: ["Email", "Name"],
+        contentRowIdColumn: "Id");
+}
+```
+
+The helper creates:
+
+- the FTS5 virtual table
+- a seed statement for existing rows
+- insert, update, and delete synchronization triggers
+
+Current SQLite caveat:
+
+- query translation assumes the default virtual table naming convention used by `CreateSqliteTextSearchIndex(...)`
+- custom SQLite virtual table names are supported by the migration helper, but query translation is not yet model-configurable for custom names
+
+## Tests
+
+The solution includes:
+
+- model-configuration tests
+- SQL translation tests for PostgreSQL and SQLite
+- migration helper tests
+- end-to-end SQLite workflow tests against a real in-memory SQLite database
+- end-to-end PostgreSQL workflow and performance tests against a real local PostgreSQL server
+- performance smoke tests comparing `TextContains(...)` with a naive `Contains(...)` query
+
+### PostgreSQL local test setup
+
+PostgreSQL integration and performance tests are opt-in. They look for either:
+
+- `PortableTextSearch.Tests/postgres.local.json`
+- environment overrides
+
+Start from `PortableTextSearch.Tests/postgres.local.json.example`:
 
 ```json
 {
@@ -90,21 +160,23 @@ Example:
 }
 ```
 
-Each test run creates a fresh database with a unique name derived from `DatabaseNamePrefix`, runs the EF migration and query workflow, and drops the database in teardown.
+The configured account must be able to:
 
-Environment variables are still supported as an override:
+- connect to the maintenance database
+- create and drop databases
+- create the `pg_trgm` extension inside the temporary test database
+
+Each PostgreSQL integration test run creates a fresh temporary database, applies migrations, runs the test workflow, and drops the database during teardown.
+
+Environment overrides are also supported:
 
 - `PORTABLE_TEXT_SEARCH_POSTGRES_ADMIN_CONNECTION`
 - `PORTABLE_TEXT_SEARCH_POSTGRES_DATABASE_NAME`
 
-## SQLite limitation
+## Current scope
 
-SQLite query translation now targets FTS5 directly, and migration helpers generate the virtual table plus synchronization triggers. The current first version assumes the default virtual table naming convention from the migration helper when translating LINQ queries. If you choose a custom SQLite virtual table name, you should treat that as an advanced scenario until model-level naming configuration is added.
+The current public query API is intentionally small:
 
-## Next direction
+- `EF.Functions.TextContains(field, value)`
 
-The current architecture leaves room for future SQLite FTS5 support by keeping:
-
-- provider-neutral public APIs
-- provider-specific query translators
-- separate migration helper entry points
+That keeps the translation surface simple and portable. Multi-field search is composed with normal LINQ rather than a custom params-based API.

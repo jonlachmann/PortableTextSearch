@@ -33,21 +33,51 @@ internal sealed class PortableTextSearchQuerySqlGeneratorFactory : IQuerySqlGene
         object[] explicitArguments)
         where T : class
     {
-        var type = Type.GetType(assemblyQualifiedTypeName, throwOnError: true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .OrderByDescending(candidate => candidate.GetParameters().Length)
-            .First();
+        var type = Type.GetType(assemblyQualifiedTypeName, throwOnError: false)
+            ?? throw new InvalidOperationException(
+                $"Unable to load provider service type '{assemblyQualifiedTypeName}'.");
 
+        foreach (var constructor in type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                     .OrderByDescending(candidate => candidate.GetParameters().Length))
+        {
+            if (TryResolveConstructorArguments(serviceProvider, explicitArguments, constructor, out var arguments))
+            {
+                return (T)constructor.Invoke(arguments);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Unable to construct provider service '{type.FullName}'. No usable constructor matched the available EF Core services.");
+    }
+
+    private static bool TryResolveConstructorArguments(
+        IServiceProvider serviceProvider,
+        object[] explicitArguments,
+        ConstructorInfo constructor,
+        out object?[] arguments)
+    {
         var parameters = constructor.GetParameters();
-        var arguments = new object?[parameters.Length];
+        arguments = new object?[parameters.Length];
 
         for (var i = 0; i < parameters.Length; i++)
         {
-            arguments[i] = explicitArguments.FirstOrDefault(argument => parameters[i].ParameterType.IsInstanceOfType(argument))
-                ?? serviceProvider.GetRequiredService(parameters[i].ParameterType);
+            var explicitArgument = explicitArguments.FirstOrDefault(argument => parameters[i].ParameterType.IsInstanceOfType(argument));
+            if (explicitArgument is not null)
+            {
+                arguments[i] = explicitArgument;
+                continue;
+            }
+
+            var service = serviceProvider.GetService(parameters[i].ParameterType);
+            if (service is null)
+            {
+                return false;
+            }
+
+            arguments[i] = service;
         }
 
-        return (T)constructor.Invoke(arguments);
+        return true;
     }
 }
 
