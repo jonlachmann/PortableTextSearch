@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyName>PortableTextSearch.Tests</AssemblyName>
+    <AssemblyName>PortableTextSearch.Tests.EF9</AssemblyName>
     <RootNamespace>PortableTextSearch.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,8 +13,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.4">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.9">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive; compile</IncludeAssets>
     </PackageReference>
@@ -26,15 +27,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PortableTextSearch\PortableTextSearch.csproj" />
+    <ProjectReference Include="..\PortableTextSearch.EF9\PortableTextSearch.EF9.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="postgres.local.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('postgres.local.json')" />
-    <None Update="postgres.local.json.example" CopyToOutputDirectory="PreserveNewest" />
-    <None Update="postgres.local.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <Compile Include="..\PortableTextSearch.Tests\**\*.cs"
+             Exclude="..\PortableTextSearch.Tests\bin\**;..\PortableTextSearch.Tests\obj\**" />
+    <None Include="..\PortableTextSearch.Tests\postgres.local.json"
+          Link="postgres.local.json"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\PortableTextSearch.Tests\postgres.local.json')" />
+    <None Include="..\PortableTextSearch.Tests\postgres.local.json.example"
+          Link="postgres.local.json.example"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

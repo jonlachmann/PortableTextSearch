@@ -52,4 +52,33 @@ public static partial class MigrationBuilderExtensions
         migrationBuilder.Sql(sql);
         return migrationBuilder;
     }
+
+    /// <summary>
+    /// Emits SQL to drop a GIN trigram index for a text column if it exists.
+    /// </summary>
+    /// <param name="migrationBuilder">The migration builder.</param>
+    /// <param name="table">The table name.</param>
+    /// <param name="column">The text column name.</param>
+    /// <param name="schema">An optional schema.</param>
+    /// <param name="indexName">An optional index name override.</param>
+    /// <returns>The same migration builder for chaining.</returns>
+    public static MigrationBuilder DropPostgresTextSearchIndex(
+        this MigrationBuilder migrationBuilder,
+        string table,
+        string column,
+        string? schema = null,
+        string? indexName = null)
+    {
+        ArgumentNullException.ThrowIfNull(migrationBuilder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(table);
+        ArgumentException.ThrowIfNullOrWhiteSpace(column);
+
+        var resolvedIndexName = indexName ?? $"IX_{table}_{column}_TextSearch";
+        var qualifiedIndexName = schema is null
+            ? SqlIdentifier.Quote(resolvedIndexName)
+            : $"{SqlIdentifier.Quote(schema)}.{SqlIdentifier.Quote(resolvedIndexName)}";
+
+        migrationBuilder.Sql($"DROP INDEX IF EXISTS {qualifiedIndexName};");
+        return migrationBuilder;
+    }
 }

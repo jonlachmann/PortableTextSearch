@@ -55,7 +55,16 @@ internal sealed class PostgreSqlTestDatabaseScope : IAsyncDisposable
                 WHERE datname = '{escapedDatabaseName}'
                   AND pid <> pg_backend_pid();
                 """;
-            await terminateCommand.ExecuteNonQueryAsync();
+            try
+            {
+                await terminateCommand.ExecuteNonQueryAsync();
+            }
+            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.InsufficientPrivilege)
+            {
+                // Some local test accounts can create/drop the ephemeral database but are not allowed
+                // to terminate other backends via pg_terminate_backend. Clearing pools first is usually
+                // enough for our own sessions, so fall through and attempt the drop anyway.
+            }
         }
 
         await using (var dropCommand = connection.CreateCommand())

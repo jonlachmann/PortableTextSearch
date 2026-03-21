@@ -1,5 +1,8 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using PortableTextSearch.Configuration;
 using PortableTextSearch.Query;
 using PortableTextSearch.Tests.TestModel;
@@ -31,6 +34,20 @@ public sealed class ConfigurationTests
         var entityType = context.Model.FindEntityType(typeof(MessageRecipient));
 
         entityType!.GetTextSearchProperties().Should().Equal("Email");
+    }
+
+    [Fact]
+    public void HasTextSearch_stores_deterministic_annotation_values()
+    {
+        using var firstContext = CreateSqliteContext();
+        using var secondContext = CreateSqliteContext();
+
+        var differ = firstContext.GetService<IMigrationsModelDiffer>();
+        var differences = differ.GetDifferences(
+            firstContext.GetService<IDesignTimeModel>().Model.GetRelationalModel(),
+            secondContext.GetService<IDesignTimeModel>().Model.GetRelationalModel());
+
+        differences.Should().BeEmpty();
     }
 
     [Fact]

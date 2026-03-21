@@ -1,7 +1,11 @@
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using PortableTextSearch.Configuration;
+using PortableTextSearch.Migrations;
 
 namespace PortableTextSearch.Query;
 
@@ -17,6 +21,8 @@ internal sealed class PortableTextSearchOptionsExtension : IDbContextOptionsExte
             ServiceDescriptor.Scoped<IMethodCallTranslatorPlugin, PortableTextSearchMethodCallTranslatorPlugin>());
         services.Replace(ServiceDescriptor.Scoped<IQuerySqlGeneratorFactory, PortableTextSearchQuerySqlGeneratorFactory>());
         services.Replace(ServiceDescriptor.Scoped<IRelationalParameterBasedSqlProcessorFactory, PortableTextSearchRelationalParameterBasedSqlProcessorFactory>());
+        services.Replace(ServiceDescriptor.Scoped<IMigrationsModelDiffer, PortableTextSearchMigrationsModelDiffer>());
+        services.Replace(ServiceDescriptor.Singleton<IAnnotationCodeGenerator, PortableTextSearchAnnotationCodeGenerator>());
     }
 
     public void Validate(IDbContextOptions options)

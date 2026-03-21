@@ -15,7 +15,10 @@ public static partial class MigrationBuilderExtensions
     /// <param name="table">The base table name.</param>
     /// <param name="columns">The text columns included in the FTS index.</param>
     /// <param name="virtualTableName">An optional FTS5 virtual table name override.</param>
-    /// <param name="contentRowIdColumn">The primary-key column mapped to the FTS <c>rowid</c>.</param>
+    /// <param name="contentRowIdColumn">
+    /// The entity key column copied into the FTS table's unindexed key column.
+    /// The parameter name is preserved for source compatibility.
+    /// </param>
     /// <returns>The same migration builder for chaining.</returns>
     public static MigrationBuilder CreateSqliteTextSearchIndex(
         this MigrationBuilder migrationBuilder,
@@ -44,7 +47,10 @@ public static partial class MigrationBuilderExtensions
     /// <param name="table">The base table name.</param>
     /// <param name="columns">The text columns previously included in the FTS index.</param>
     /// <param name="virtualTableName">An optional FTS5 virtual table name override.</param>
-    /// <param name="contentRowIdColumn">The primary-key column mapped to the FTS <c>rowid</c>.</param>
+    /// <param name="contentRowIdColumn">
+    /// The entity key column copied into the FTS table's unindexed key column.
+    /// The parameter name is preserved for source compatibility.
+    /// </param>
     /// <returns>The same migration builder for chaining.</returns>
     public static MigrationBuilder DropSqliteTextSearchIndex(
         this MigrationBuilder migrationBuilder,

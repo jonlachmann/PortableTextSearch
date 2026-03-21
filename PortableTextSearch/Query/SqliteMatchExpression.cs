@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -7,6 +8,11 @@ namespace PortableTextSearch.Query;
 
 internal sealed class SqliteMatchExpression : SqlExpression
 {
+    private static readonly ConstructorInfo QuoteConstructor =
+        typeof(SqliteMatchExpression).GetConstructor(
+            [typeof(SqlExpression), typeof(SqlExpression), typeof(RelationalTypeMapping)])
+        ?? throw new InvalidOperationException("Unable to locate SqliteMatchExpression quoting constructor.");
+
     public SqliteMatchExpression(SqlExpression match, SqlExpression pattern, RelationalTypeMapping typeMapping)
         : base(typeof(bool), typeMapping)
     {
@@ -38,4 +44,13 @@ internal sealed class SqliteMatchExpression : SqlExpression
         expressionPrinter.Append(" MATCH ");
         expressionPrinter.Visit(Pattern);
     }
+
+#if !PORTABLETEXTSEARCH_EF8
+    public override Expression Quote()
+        => Expression.New(
+            QuoteConstructor,
+            Expression.Constant(Match, typeof(SqlExpression)),
+            Expression.Constant(Pattern, typeof(SqlExpression)),
+            Expression.Constant(TypeMapping, typeof(RelationalTypeMapping)));
+#endif
 }

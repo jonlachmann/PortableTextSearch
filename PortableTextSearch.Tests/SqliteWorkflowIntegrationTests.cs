@@ -128,6 +128,54 @@ public sealed class SqliteWorkflowIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task Migration_and_query_workflow_supports_guid_primary_keys()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<SqliteGuidWorkflowContext>()
+            .UseSqlite(connection, sqlite => sqlite.MigrationsAssembly(typeof(SqliteGuidWorkflowContext).Assembly.FullName))
+            .UsePortableTextSearch()
+            .Options;
+
+        var recipientId = Guid.NewGuid();
+
+        await using (var setupContext = new SqliteGuidWorkflowContext(options))
+        {
+            await setupContext.Database.MigrateAsync();
+
+            setupContext.Recipients.Add(new GuidWorkflowRecipient
+            {
+                Id = recipientId,
+                MessageId = "message-guid-1",
+                Type = 4,
+                Email = "guid.alice@example.com",
+                Name = "Guid Alice"
+            });
+
+            await setupContext.SaveChangesAsync();
+        }
+
+        await using (var queryContext = new SqliteGuidWorkflowContext(options))
+        {
+            var querySql = queryContext.Recipients
+                .Where(x => EF.Functions.TextContains(x.Email, "guid"))
+                .ToQueryString();
+
+            querySql.Should().Contain("GuidRecipients_TextSearch");
+            querySql.Should().Contain("\"__pts_entity_key\"");
+            querySql.Should().Contain("\"Email\" MATCH 'guid'");
+
+            var matches = await queryContext.Recipients
+                .Where(x => EF.Functions.TextContains(x.Email, "guid"))
+                .ToListAsync();
+
+            matches.Should().ContainSingle();
+            matches[0].Id.Should().Be(recipientId);
+        }
+    }
+
     public sealed class SqliteWorkflowContext(DbContextOptions<SqliteWorkflowContext> options) : DbContext(options)
     {
         public DbSet<WorkflowRecipient> Recipients => Set<WorkflowRecipient>();
@@ -147,9 +195,44 @@ public sealed class SqliteWorkflowIntegrationTests
         }
     }
 
+    public sealed class SqliteGuidWorkflowContext(DbContextOptions<SqliteGuidWorkflowContext> options) : DbContext(options)
+    {
+        public DbSet<GuidWorkflowRecipient> Recipients => Set<GuidWorkflowRecipient>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<GuidWorkflowRecipient>(builder =>
+            {
+                builder.ToTable("GuidRecipients");
+                builder.HasKey(x => x.Id);
+                builder.Property(x => x.MessageId).HasMaxLength(128).IsRequired();
+                builder.Property(x => x.Email).HasMaxLength(256);
+                builder.Property(x => x.Name).HasMaxLength(256);
+                builder.HasTextSearch(x => x.Email)
+                    .HasTextSearch(x => x.Name);
+            });
+        }
+    }
+
     public sealed class WorkflowRecipient
     {
         public int Id { get; set; }
+
+        [MaxLength(128)]
+        public string MessageId { get; set; } = null!;
+
+        public int Type { get; set; }
+
+        [MaxLength(256)]
+        public string? Email { get; set; }
+
+        [MaxLength(256)]
+        public string? Name { get; set; }
+    }
+
+    public sealed class GuidWorkflowRecipient
+    {
+        public Guid Id { get; set; }
 
         [MaxLength(128)]
         public string MessageId { get; set; } = null!;
@@ -196,6 +279,41 @@ public sealed class SqliteWorkflowIntegrationTests
                 contentRowIdColumn: "Id");
 
             migrationBuilder.DropTable("MessageRecipients");
+        }
+    }
+
+    [DbContext(typeof(SqliteGuidWorkflowContext))]
+    [Migration("202603210001_CreateGuidWorkflowSchema")]
+    public sealed class CreateGuidWorkflowSchemaMigration : Migration
+    {
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.CreateTable(
+                name: "GuidRecipients",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    MessageId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    Type = table.Column<int>(type: "INTEGER", nullable: false),
+                    Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true)
+                },
+                constraints: table => table.PrimaryKey("PK_GuidRecipients", x => x.Id));
+
+            migrationBuilder.CreateSqliteTextSearchIndex(
+                table: "GuidRecipients",
+                columns: ["Email", "Name"],
+                contentRowIdColumn: "Id");
+        }
+
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropSqliteTextSearchIndex(
+                table: "GuidRecipients",
+                columns: ["Email", "Name"],
+                contentRowIdColumn: "Id");
+
+            migrationBuilder.DropTable("GuidRecipients");
         }
     }
 }

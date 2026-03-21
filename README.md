@@ -1,6 +1,8 @@
 # PortableTextSearch
 
-PortableTextSearch is a small EF Core 8 library that adds a provider-neutral `EF.Functions.TextContains(...)` API for substring search on PostgreSQL and SQLite.
+PortableTextSearch is a small EF Core library that adds a provider-neutral `EF.Functions.TextContains(...)` API for substring search on PostgreSQL and SQLite.
+
+The repository now ships separate package lines for EF Core 8, 9, and 10. The public API stays the same across all three lines, but the package version must match the EF Core major version used by the consuming application.
 
 It is designed to keep the application-facing LINQ the same while letting each provider translate to an efficient provider-specific strategy:
 
@@ -8,6 +10,18 @@ It is designed to keep the application-facing LINQ the same while letting each p
 - SQLite: FTS5 `MATCH` queries against a synchronized virtual table
 
 ## Install and register
+
+PortableTextSearch currently supports:
+
+- package `8.x`: .NET 8, EF Core 8.x, Npgsql EF Core 8.x, SQLite EF Core 8.x
+- package `9.x`: .NET 8, EF Core 9.x, Npgsql EF Core 9.x, SQLite EF Core 9.x
+- package `10.x`: .NET 10, EF Core 10.x, Npgsql EF Core 10.x, SQLite EF Core 10.x
+
+The package id is the same for all lines:
+
+- `PortableTextSearch.EntityFrameworkCore`
+
+Choose the package version that matches your EF Core major version.
 
 Register PortableTextSearch on the same `DbContextOptionsBuilder` where the database provider is configured:
 
@@ -25,6 +39,12 @@ optionsBuilder
     .UsePortableTextSearch();
 ```
 
+Example installation:
+
+```bash
+dotnet add package PortableTextSearch.EntityFrameworkCore --version 9.0.0
+```
+
 ## Configure searchable fields
 
 Mark mapped string properties with `HasTextSearch(...)` in model configuration:
@@ -39,6 +59,8 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 ```
 
 The configuration is stored as EF Core model metadata. The expression must be a simple mapped string property access such as `x => x.Email`.
+
+When `HasTextSearch(...)` is added or removed, EF Core migrations now pick that up automatically. PortableTextSearch contributes provider-specific SQL operations during model diffing so a newly scaffolded migration is not empty.
 
 ## Querying
 
@@ -91,6 +113,8 @@ protected override void Up(MigrationBuilder migrationBuilder)
 }
 ```
 
+When a migration is scaffolded from `HasTextSearch(...)`, PortableTextSearch emits the equivalent SQL automatically. The helpers below remain available if you prefer to write or customize the migration by hand.
+
 These helpers emit SQL for:
 
 - `CREATE EXTENSION IF NOT EXISTS pg_trgm;`
@@ -99,6 +123,7 @@ These helpers emit SQL for:
 ### SQLite
 
 `TextContains(field, value)` translates to an FTS5-backed `MATCH` query against a synchronized virtual table created by the SQLite migration helper.
+The SQLite implementation supports integer and Guid keys by storing the real entity key in an unindexed FTS column rather than relying on the FTS table's internal `rowid`.
 
 Migration helpers:
 
@@ -122,9 +147,12 @@ protected override void Up(MigrationBuilder migrationBuilder)
 }
 ```
 
+When a migration is scaffolded from `HasTextSearch(...)`, PortableTextSearch emits the equivalent SQL automatically. The helper remains available if you want to author the migration explicitly.
+
 The helper creates:
 
 - the FTS5 virtual table
+- an unindexed key column used to link FTS matches back to the base table
 - a seed statement for existing rows
 - insert, update, and delete synchronization triggers
 
@@ -143,6 +171,12 @@ The solution includes:
 - end-to-end SQLite workflow tests against a real in-memory SQLite database
 - end-to-end PostgreSQL workflow and performance tests against a real local PostgreSQL server
 - performance smoke tests comparing `TextContains(...)` with a naive `Contains(...)` query
+
+This repo now carries parallel test projects for all supported EF Core majors:
+
+- `PortableTextSearch.Tests` validates the EF Core 8 package line
+- `PortableTextSearch.Tests.EF9` validates the EF Core 9 package line
+- `PortableTextSearch.Tests.EF10` validates the EF Core 10 package line
 
 ### PostgreSQL local test setup
 

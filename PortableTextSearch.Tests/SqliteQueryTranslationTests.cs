@@ -9,7 +9,7 @@ namespace PortableTextSearch.Tests;
 public sealed class SqliteQueryTranslationTests
 {
     [Fact]
-    public void TextContains_translates_to_instr_based_search()
+    public void TextContains_translates_to_fts_key_subquery()
     {
         using var context = CreateContext();
 
@@ -18,7 +18,7 @@ public sealed class SqliteQueryTranslationTests
             .ToQueryString();
 
         sql.Should().Contain(" IN (");
-        sql.Should().Contain("SELECT rowid, \"Email\", \"Name\" FROM \"MessageRecipients_TextSearch\"");
+        sql.Should().Contain("SELECT \"__pts_entity_key\", \"Email\", \"Name\" FROM \"MessageRecipients_TextSearch\"");
         sql.Should().Contain("\"Email\" MATCH 'alice'");
     }
 

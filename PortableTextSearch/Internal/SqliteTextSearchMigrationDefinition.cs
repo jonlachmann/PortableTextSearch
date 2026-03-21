@@ -2,16 +2,18 @@ namespace PortableTextSearch.Internal;
 
 internal sealed class SqliteTextSearchMigrationDefinition
 {
+    public const string EntityKeyColumnName = "__pts_entity_key";
+
     private SqliteTextSearchMigrationDefinition(
         string table,
         IReadOnlyList<string> columns,
         string virtualTableName,
-        string contentRowIdColumn)
+        string keyColumnName)
     {
         Table = table;
         Columns = columns;
         VirtualTableName = virtualTableName;
-        ContentRowIdColumn = contentRowIdColumn;
+        KeyColumnName = keyColumnName;
         InsertTriggerName = $"trg_{table}_{virtualTableName}_ai";
         UpdateTriggerName = $"trg_{table}_{virtualTableName}_au";
         DeleteTriggerName = $"trg_{table}_{virtualTableName}_ad";
@@ -28,7 +30,7 @@ internal sealed class SqliteTextSearchMigrationDefinition
 
     public string VirtualTableName { get; }
 
-    public string ContentRowIdColumn { get; }
+    public string KeyColumnName { get; }
 
     public string InsertTriggerName { get; }
 
@@ -50,11 +52,11 @@ internal sealed class SqliteTextSearchMigrationDefinition
         string table,
         IReadOnlyList<string> columns,
         string? virtualTableName,
-        string contentRowIdColumn)
+        string keyColumnName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(table);
         ArgumentNullException.ThrowIfNull(columns);
-        ArgumentException.ThrowIfNullOrWhiteSpace(contentRowIdColumn);
+        ArgumentException.ThrowIfNullOrWhiteSpace(keyColumnName);
 
         var normalizedColumns = columns
             .Select(column =>
@@ -74,56 +76,53 @@ internal sealed class SqliteTextSearchMigrationDefinition
             table,
             normalizedColumns,
             virtualTableName ?? SqliteTextSearchNaming.GetDefaultVirtualTableName(table),
-            contentRowIdColumn);
+            keyColumnName);
     }
 
     private string BuildCreateVirtualTableSql()
     {
-        var columnList = string.Join(", ", Columns.Select(SqlIdentifier.Quote));
+        var columnList = string.Join(", ", Columns.Select(SqlIdentifier.Quote).Prepend($"{SqlIdentifier.Quote(EntityKeyColumnName)} UNINDEXED"));
         return
-            $"CREATE VIRTUAL TABLE {SqlIdentifier.Quote(VirtualTableName)} USING fts5({columnList}, content={SqlStringLiteral.Quote(Table)}, content_rowid={SqlStringLiteral.Quote(ContentRowIdColumn)});";
+            $"CREATE VIRTUAL TABLE {SqlIdentifier.Quote(VirtualTableName)} USING fts5({columnList});";
     }
 
     private string BuildSeedExistingRowsSql()
     {
-        var quotedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote));
-        var selectedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote));
+        var quotedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote).Prepend(SqlIdentifier.Quote(EntityKeyColumnName)));
+        var selectedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote).Prepend(SqlIdentifier.Quote(KeyColumnName)));
         return
-            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} (rowid, {quotedColumns}) SELECT {SqlIdentifier.Quote(ContentRowIdColumn)}, {selectedColumns} FROM {SqlIdentifier.Quote(Table)};";
+            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} ({quotedColumns}) SELECT {selectedColumns} FROM {SqlIdentifier.Quote(Table)};";
     }
 
     private string BuildInsertTriggerSql()
     {
-        var quotedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote));
-        var insertedValues = string.Join(", ", Columns.Select(column => $"new.{SqlIdentifier.Quote(column)}"));
+        var quotedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote).Prepend(SqlIdentifier.Quote(EntityKeyColumnName)));
+        var insertedValues = string.Join(", ", Columns.Select(column => $"new.{SqlIdentifier.Quote(column)}").Prepend($"new.{SqlIdentifier.Quote(KeyColumnName)}"));
 
         return
             $"CREATE TRIGGER {SqlIdentifier.Quote(InsertTriggerName)} AFTER INSERT ON {SqlIdentifier.Quote(Table)} BEGIN " +
-            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} (rowid, {quotedColumns}) VALUES (new.{SqlIdentifier.Quote(ContentRowIdColumn)}, {insertedValues}); " +
+            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} ({quotedColumns}) VALUES ({insertedValues}); " +
             "END;";
     }
 
     private string BuildUpdateTriggerSql()
     {
-        var quotedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote));
-        var deletedValues = string.Join(", ", Columns.Select(column => $"old.{SqlIdentifier.Quote(column)}"));
-        var insertedValues = string.Join(", ", Columns.Select(column => $"new.{SqlIdentifier.Quote(column)}"));
+        var quotedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote).Prepend(SqlIdentifier.Quote(EntityKeyColumnName)));
+        var deletedValues = string.Join(", ", Columns.Select(column => $"old.{SqlIdentifier.Quote(column)}").Prepend($"old.{SqlIdentifier.Quote(KeyColumnName)}"));
+        var insertedValues = string.Join(", ", Columns.Select(column => $"new.{SqlIdentifier.Quote(column)}").Prepend($"new.{SqlIdentifier.Quote(KeyColumnName)}"));
 
         return
             $"CREATE TRIGGER {SqlIdentifier.Quote(UpdateTriggerName)} AFTER UPDATE ON {SqlIdentifier.Quote(Table)} BEGIN " +
-            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} ({SqlIdentifier.Quote(VirtualTableName)}, rowid, {quotedColumns}) VALUES ({SqlStringLiteral.Quote("delete")}, old.{SqlIdentifier.Quote(ContentRowIdColumn)}, {deletedValues}); " +
-            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} (rowid, {quotedColumns}) VALUES (new.{SqlIdentifier.Quote(ContentRowIdColumn)}, {insertedValues}); " +
+            $"DELETE FROM {SqlIdentifier.Quote(VirtualTableName)} WHERE {SqlIdentifier.Quote(EntityKeyColumnName)} = old.{SqlIdentifier.Quote(KeyColumnName)}; " +
+            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} ({quotedColumns}) VALUES ({insertedValues}); " +
             "END;";
     }
 
     private string BuildDeleteTriggerSql()
     {
-        var quotedColumns = string.Join(", ", Columns.Select(SqlIdentifier.Quote));
-        var deletedValues = string.Join(", ", Columns.Select(column => $"old.{SqlIdentifier.Quote(column)}"));
-
         return
             $"CREATE TRIGGER {SqlIdentifier.Quote(DeleteTriggerName)} AFTER DELETE ON {SqlIdentifier.Quote(Table)} BEGIN " +
-            $"INSERT INTO {SqlIdentifier.Quote(VirtualTableName)} ({SqlIdentifier.Quote(VirtualTableName)}, rowid, {quotedColumns}) VALUES ({SqlStringLiteral.Quote("delete")}, old.{SqlIdentifier.Quote(ContentRowIdColumn)}, {deletedValues}); " +
+            $"DELETE FROM {SqlIdentifier.Quote(VirtualTableName)} WHERE {SqlIdentifier.Quote(EntityKeyColumnName)} = old.{SqlIdentifier.Quote(KeyColumnName)}; " +
             "END;";
     }
 }

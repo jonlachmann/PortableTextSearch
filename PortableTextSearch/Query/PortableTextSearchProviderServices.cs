@@ -101,6 +101,11 @@ internal sealed class PortableTextSearchRelationalParameterBasedSqlProcessorFact
         };
     }
 
+#if PORTABLETEXTSEARCH_EF8
     public RelationalParameterBasedSqlProcessor Create(bool useRelationalNulls)
         => _innerFactory.Create(useRelationalNulls);
+#else
+    public RelationalParameterBasedSqlProcessor Create(RelationalParameterBasedSqlProcessorParameters parameters)
+        => _innerFactory.Create(parameters);
+#endif
 }

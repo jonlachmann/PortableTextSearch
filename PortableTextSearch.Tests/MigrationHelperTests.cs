@@ -54,7 +54,24 @@ public sealed class MigrationHelperTests
     }
 
     [Fact]
-    public void CreateSqliteTextSearchIndex_is_an_explicit_stub()
+    public void DropPostgresTextSearchIndex_supports_schema_and_default_name()
+    {
+        var migrationBuilder = new MigrationBuilder("Npgsql.EntityFrameworkCore.PostgreSQL");
+
+        migrationBuilder.DropPostgresTextSearchIndex(
+            table: "MessageRecipients",
+            column: "Email",
+            schema: "app");
+
+        GetSqlOperations(migrationBuilder)
+            .Single()
+            .Sql
+            .Should()
+            .Be("DROP INDEX IF EXISTS \"app\".\"IX_MessageRecipients_Email_TextSearch\";");
+    }
+
+    [Fact]
+    public void CreateSqliteTextSearchIndex_emits_expected_fts5_sql()
     {
         var migrationBuilder = new MigrationBuilder("Microsoft.EntityFrameworkCore.Sqlite");
 
@@ -64,8 +81,9 @@ public sealed class MigrationHelperTests
 
         sql.Should().HaveCount(5);
         sql[0].Should().Contain("CREATE VIRTUAL TABLE \"MessageRecipients_TextSearch\" USING fts5");
-        sql[0].Should().Contain("content='MessageRecipients'");
+        sql[0].Should().Contain("\"__pts_entity_key\" UNINDEXED");
         sql[1].Should().Contain("INSERT INTO \"MessageRecipients_TextSearch\"");
+        sql[1].Should().Contain("\"__pts_entity_key\"");
         sql[2].Should().Contain("CREATE TRIGGER \"trg_MessageRecipients_MessageRecipients_TextSearch_ai\"");
         sql[3].Should().Contain("CREATE TRIGGER \"trg_MessageRecipients_MessageRecipients_TextSearch_au\"");
         sql[4].Should().Contain("CREATE TRIGGER \"trg_MessageRecipients_MessageRecipients_TextSearch_ad\"");
