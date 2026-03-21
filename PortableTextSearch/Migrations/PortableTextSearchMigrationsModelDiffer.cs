@@ -1,7 +1,6 @@
 #pragma warning disable EF1001
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Internal;
@@ -10,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using PortableTextSearch.Configuration;
 using PortableTextSearch.Internal;
+using PortableTextSearch.Migrations.Operations;
 
 namespace PortableTextSearch.Migrations;
 
@@ -83,7 +83,7 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
 
         if (_databaseProvider.Name == ProviderNames.Npgsql && addedKeys.Length != 0)
         {
-            operations.Add(Sql("CREATE EXTENSION IF NOT EXISTS pg_trgm;"));
+            operations.Add(new EnsurePostgresTrigramExtensionOperation());
         }
 
         foreach (var key in addedKeys)
@@ -160,9 +160,19 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
         => _databaseProvider.Name switch
         {
             ProviderNames.Npgsql => configuration.SearchColumns
-                .Select(column => Sql(CreatePostgresCreateIndexSql(configuration.Table, column, configuration.Schema)))
+                .Select(column => new CreatePostgresTextSearchIndexOperation
+                {
+                    Table = configuration.Table,
+                    Column = column,
+                    Schema = configuration.Schema
+                })
                 .ToArray(),
-            ProviderNames.Sqlite => CreateSqliteCreateOperations(configuration),
+            ProviderNames.Sqlite => [new CreateSqliteTextSearchIndexOperation
+            {
+                Table = configuration.Table,
+                Columns = configuration.SearchColumns,
+                ContentKeyColumn = configuration.KeyColumnName
+            }],
             _ => []
         };
 
@@ -170,65 +180,21 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
         => _databaseProvider.Name switch
         {
             ProviderNames.Npgsql => configuration.SearchColumns
-                .Select(column => Sql(CreatePostgresDropIndexSql(configuration.Table, column, configuration.Schema)))
+                .Select(column => new DropPostgresTextSearchIndexOperation
+                {
+                    Table = configuration.Table,
+                    Column = column,
+                    Schema = configuration.Schema
+                })
                 .ToArray(),
-            ProviderNames.Sqlite => CreateSqliteDropOperations(configuration),
+            ProviderNames.Sqlite => [new DropSqliteTextSearchIndexOperation
+            {
+                Table = configuration.Table,
+                Columns = configuration.SearchColumns,
+                ContentKeyColumn = configuration.KeyColumnName
+            }],
             _ => []
         };
-
-    private static IReadOnlyList<MigrationOperation> CreateSqliteCreateOperations(TextSearchTableConfiguration configuration)
-    {
-        var definition = SqliteTextSearchMigrationDefinition.Create(
-            configuration.Table,
-            configuration.SearchColumns,
-            virtualTableName: null,
-            configuration.KeyColumnName);
-
-        return
-        [
-            Sql(definition.CreateVirtualTableSql),
-            Sql(definition.SeedExistingRowsSql),
-            Sql(definition.InsertTriggerSql),
-            Sql(definition.UpdateTriggerSql),
-            Sql(definition.DeleteTriggerSql)
-        ];
-    }
-
-    private static IReadOnlyList<MigrationOperation> CreateSqliteDropOperations(TextSearchTableConfiguration configuration)
-    {
-        var definition = SqliteTextSearchMigrationDefinition.Create(
-            configuration.Table,
-            configuration.SearchColumns,
-            virtualTableName: null,
-            configuration.KeyColumnName);
-
-        return
-        [
-            Sql($"DROP TRIGGER IF EXISTS {SqlIdentifier.Quote(definition.InsertTriggerName)};"),
-            Sql($"DROP TRIGGER IF EXISTS {SqlIdentifier.Quote(definition.UpdateTriggerName)};"),
-            Sql($"DROP TRIGGER IF EXISTS {SqlIdentifier.Quote(definition.DeleteTriggerName)};"),
-            Sql($"DROP TABLE IF EXISTS {SqlIdentifier.Quote(definition.VirtualTableName)};")
-        ];
-    }
-
-    private static string CreatePostgresCreateIndexSql(string table, string column, string? schema)
-    {
-        var qualifiedTable = schema is null
-            ? SqlIdentifier.Quote(table)
-            : $"{SqlIdentifier.Quote(schema)}.{SqlIdentifier.Quote(table)}";
-        var indexName = $"IX_{table}_{column}_TextSearch";
-        return $"CREATE INDEX {SqlIdentifier.Quote(indexName)} ON {qualifiedTable} USING GIN ({SqlIdentifier.Quote(column)} gin_trgm_ops);";
-    }
-
-    private static string CreatePostgresDropIndexSql(string table, string column, string? schema)
-    {
-        var indexName = $"IX_{table}_{column}_TextSearch";
-        return schema is null
-            ? $"DROP INDEX IF EXISTS {SqlIdentifier.Quote(indexName)};"
-            : $"DROP INDEX IF EXISTS {SqlIdentifier.Quote(schema)}.{SqlIdentifier.Quote(indexName)};";
-    }
-
-    private static SqlOperation Sql(string sql) => new() { Sql = sql };
 
     private static bool ConfigurationEquals(
         TextSearchTableConfiguration left,

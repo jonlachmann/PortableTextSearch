@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PortableTextSearch.Configuration;
 using PortableTextSearch.Design;
 using PortableTextSearch.Functions;
+using PortableTextSearch.Migrations.Operations;
 using PortableTextSearch.Query;
 using PortableTextSearch.Tests.TestModel;
 
@@ -26,10 +27,11 @@ public sealed class MigrationAutomationTests
         using var targetContext = CreateSqliteContext<SqliteWithTextSearchContext>();
 
         var operations = GetOperations(targetContext, sourceContext, targetContext);
-        var sql = operations.OfType<SqlOperation>().Select(operation => operation.Sql).ToArray();
+        var createOperation = operations.OfType<CreateSqliteTextSearchIndexOperation>().Single();
 
-        sql.Should().Contain(statement => statement.Contains("CREATE VIRTUAL TABLE \"MessageRecipients_TextSearch\"", StringComparison.Ordinal));
-        sql.Should().Contain(statement => statement.Contains("CREATE TRIGGER \"trg_MessageRecipients_MessageRecipients_TextSearch_ai\"", StringComparison.Ordinal));
+        createOperation.Table.Should().Be("MessageRecipients");
+        createOperation.Columns.Should().Equal("Email", "Name");
+        createOperation.ContentKeyColumn.Should().Be("Id");
     }
 
     [Fact]
@@ -39,10 +41,11 @@ public sealed class MigrationAutomationTests
         using var targetContext = CreateSqliteContext<SqliteWithoutTextSearchContext>();
 
         var operations = GetOperations(targetContext, sourceContext, targetContext);
-        var sql = operations.OfType<SqlOperation>().Select(operation => operation.Sql).ToArray();
+        var dropOperation = operations.OfType<DropSqliteTextSearchIndexOperation>().Single();
 
-        sql.Should().Contain(statement => statement.Contains("DROP TRIGGER IF EXISTS \"trg_MessageRecipients_MessageRecipients_TextSearch_ai\"", StringComparison.Ordinal));
-        sql.Should().Contain(statement => statement.Contains("DROP TABLE IF EXISTS \"MessageRecipients_TextSearch\"", StringComparison.Ordinal));
+        dropOperation.Table.Should().Be("MessageRecipients");
+        dropOperation.Columns.Should().Equal("Email", "Name");
+        dropOperation.ContentKeyColumn.Should().Be("Id");
     }
 
     [Fact]
@@ -52,11 +55,11 @@ public sealed class MigrationAutomationTests
         using var targetContext = CreatePostgresContext<PostgresWithTextSearchContext>();
 
         var operations = GetOperations(targetContext, sourceContext, targetContext);
-        var sql = operations.OfType<SqlOperation>().Select(operation => operation.Sql).ToArray();
-
-        sql.Should().Contain("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
-        sql.Should().Contain(statement => statement.Contains("CREATE INDEX \"IX_MessageRecipients_Email_TextSearch\"", StringComparison.Ordinal));
-        sql.Should().Contain(statement => statement.Contains("CREATE INDEX \"IX_MessageRecipients_Name_TextSearch\"", StringComparison.Ordinal));
+        operations.OfType<EnsurePostgresTrigramExtensionOperation>().Should().ContainSingle();
+        operations.OfType<CreatePostgresTextSearchIndexOperation>()
+            .Select(operation => operation.Column)
+            .Should()
+            .Equal("Email", "Name");
     }
 
     [Fact]
@@ -66,10 +69,10 @@ public sealed class MigrationAutomationTests
         using var targetContext = CreatePostgresContext<PostgresWithoutTextSearchContext>();
 
         var operations = GetOperations(targetContext, sourceContext, targetContext);
-        var sql = operations.OfType<SqlOperation>().Select(operation => operation.Sql).ToArray();
-
-        sql.Should().Contain("DROP INDEX IF EXISTS \"IX_MessageRecipients_Email_TextSearch\";");
-        sql.Should().Contain("DROP INDEX IF EXISTS \"IX_MessageRecipients_Name_TextSearch\";");
+        operations.OfType<DropPostgresTextSearchIndexOperation>()
+            .Select(operation => operation.Column)
+            .Should()
+            .Equal("Email", "Name");
     }
 
     [Fact]
@@ -80,7 +83,7 @@ public sealed class MigrationAutomationTests
         var scaffolder = serviceProvider.GetRequiredService<IMigrationsScaffolder>();
         var scaffoldedMigration = scaffolder.ScaffoldMigration("AddPortableTextSearch", "PortableTextSearch.Tests", subNamespace: null, language: "C#");
 
-        scaffoldedMigration.MigrationCode.Should().Contain("migrationBuilder.Sql(");
+        scaffoldedMigration.MigrationCode.Should().Contain("migrationBuilder.CreateSqliteTextSearchIndex(");
         scaffoldedMigration.SnapshotCode.Should().Contain("PortableTextSearch:SearchableProperties");
         scaffoldedMigration.SnapshotCode.Should().Contain("Email");
         scaffoldedMigration.SnapshotCode.Should().Contain("Name");
@@ -137,10 +140,10 @@ public sealed class MigrationAutomationTests
         using var targetContext = CreateSqliteContext<SqliteWithTextSearchGuidKeyContext>();
 
         var operations = GetOperations(targetContext, sourceContext, targetContext);
-        var sql = operations.OfType<SqlOperation>().Select(operation => operation.Sql).ToArray();
+        var createOperation = operations.OfType<CreateSqliteTextSearchIndexOperation>().Single();
 
-        sql.Should().Contain(statement => statement.Contains("\"__pts_entity_key\"", StringComparison.Ordinal));
-        sql.Should().Contain(statement => statement.Contains("CREATE VIRTUAL TABLE \"GuidKeyRecipients_TextSearch\"", StringComparison.Ordinal));
+        createOperation.Table.Should().Be("GuidKeyRecipients");
+        createOperation.ContentKeyColumn.Should().Be("Id");
     }
 
     private static IReadOnlyList<MigrationOperation> GetOperations(
@@ -154,7 +157,7 @@ public sealed class MigrationAutomationTests
         return differ.GetDifferences(sourceModel.GetRelationalModel(), targetModel.GetRelationalModel());
     }
 
-    private static IServiceProvider BuildDesignTimeServiceProvider(DbContext context)
+    private static ServiceProvider BuildDesignTimeServiceProvider(DbContext context)
     {
         var operationReportHandlerType = Type.GetType(
             "Microsoft.EntityFrameworkCore.Design.OperationReportHandler, Microsoft.EntityFrameworkCore.Design",
@@ -345,8 +348,8 @@ public sealed class MigrationAutomationTests
 
     private sealed class GuidKeyMessageRecipient
     {
-        public Guid Id { get; set; }
+        public Guid Id { get; init; }
 
-        public string? Email { get; set; }
+        public string? Email { get; init; }
     }
 }

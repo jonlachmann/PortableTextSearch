@@ -45,9 +45,9 @@ public sealed class SqliteQueryValidationTests
 
     private sealed class UnconfiguredRecipient
     {
-        public int Id { get; set; }
+        public int Id { get; init; }
 
         [System.ComponentModel.DataAnnotations.MaxLength(256)]
-        public string? Email { get; set; }
+        public string? Email { get; init; }
     }
 }

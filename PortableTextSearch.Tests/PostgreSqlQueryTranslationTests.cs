@@ -40,6 +40,36 @@ public sealed class PostgreSqlQueryTranslationTests
     }
 
     [Fact]
+    public void TextContainsAny_translates_to_or_conditions()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContainsAny("alice", x.Email, x.Name))
+            .ToQueryString();
+
+        sql.Should().Contain("ILIKE");
+        sql.Should().Contain(" OR ");
+        sql.Should().Contain("\"Email\"");
+        sql.Should().Contain("\"Name\"");
+    }
+
+    [Fact]
+    public void TextContainsAny_supports_six_fields()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContainsAny("alice", x.Email, x.Name, x.Email, x.Name, x.Email, x.Name))
+            .ToQueryString();
+
+        sql.Should().Contain("ILIKE");
+        sql.Should().Contain(" OR ");
+        sql.Should().Contain("\"Email\"");
+        sql.Should().Contain("\"Name\"");
+    }
+
+    [Fact]
     public void TextContains_can_be_nested_with_other_predicates()
     {
         using var context = CreateContext();

@@ -5,7 +5,7 @@
     <AssemblyName>PortableTextSearch</AssemblyName>
     <RootNamespace>PortableTextSearch</RootNamespace>
     <PackageId>PortableTextSearch.EntityFrameworkCore</PackageId>
-    <Version>8.0.0-local.4</Version>
+    <Version>8.0.0-local.7</Version>
     <Authors>Jon Lachmann</Authors>
     <Company>Jon Lachmann</Company>
     <Description>Portable EF Core text-contains search for PostgreSQL and SQLite.</Description>
@@ -25,7 +25,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.4">
       <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive; compile</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.4" />

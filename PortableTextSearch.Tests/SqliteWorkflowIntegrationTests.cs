@@ -216,12 +216,12 @@ public sealed class SqliteWorkflowIntegrationTests
 
     public sealed class WorkflowRecipient
     {
-        public int Id { get; set; }
+        public int Id { get; init; }
 
         [MaxLength(128)]
-        public string MessageId { get; set; } = null!;
+        public string MessageId { get; init; } = null!;
 
-        public int Type { get; set; }
+        public int Type { get; init; }
 
         [MaxLength(256)]
         public string? Email { get; set; }
@@ -232,18 +232,18 @@ public sealed class SqliteWorkflowIntegrationTests
 
     public sealed class GuidWorkflowRecipient
     {
-        public Guid Id { get; set; }
+        public Guid Id { get; init; }
 
         [MaxLength(128)]
-        public string MessageId { get; set; } = null!;
+        public string MessageId { get; init; } = null!;
 
-        public int Type { get; set; }
-
-        [MaxLength(256)]
-        public string? Email { get; set; }
+        public int Type { get; init; }
 
         [MaxLength(256)]
-        public string? Name { get; set; }
+        public string? Email { get; init; }
+
+        [MaxLength(256)]
+        public string? Name { get; init; }
     }
 
     [DbContext(typeof(SqliteWorkflowContext))]

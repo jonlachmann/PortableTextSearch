@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Migrations.Design;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PortableTextSearch.Configuration;
+using PortableTextSearch.Migrations;
 
 namespace PortableTextSearch.Design;
 
@@ -17,5 +19,7 @@ public sealed class PortableTextSearchDesignTimeServices : IDesignTimeServices
     public void ConfigureDesignTimeServices(IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<IAnnotationCodeGenerator, PortableTextSearchAnnotationCodeGenerator>());
+        services.Replace(ServiceDescriptor.Singleton<ICSharpMigrationOperationGenerator, PortableTextSearchCSharpMigrationOperationGenerator>());
+        services.Replace(ServiceDescriptor.Singleton<IMigrationsCodeGenerator, PortableTextSearchCSharpMigrationsGenerator>());
     }
 }

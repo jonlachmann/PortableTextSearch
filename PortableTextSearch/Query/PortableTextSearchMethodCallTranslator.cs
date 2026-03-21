@@ -17,6 +17,25 @@ internal sealed class PortableTextSearchMethodCallTranslator : IMethodCallTransl
         .GetRuntimeMethod(
             nameof(PortableTextSearchDbFunctionsExtensions.TextContains),
             [typeof(DbFunctions), typeof(string), typeof(string)])!;
+    private static readonly HashSet<MethodInfo> TextContainsAnyMethods =
+    [
+        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
+            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
+            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string)])!,
+        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
+            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
+            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string)])!,
+        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
+            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
+            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string)])!
+        ,
+        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
+            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
+            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string)])!,
+        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
+            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
+            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string)])!
+    ];
 
     private readonly IDatabaseProvider _databaseProvider;
     private readonly IModel _model;
@@ -41,24 +60,34 @@ internal sealed class PortableTextSearchMethodCallTranslator : IMethodCallTransl
         IReadOnlyList<SqlExpression> arguments,
         IDiagnosticsLogger<DbLoggerCategory.Query> logger)
     {
-        if (!Equals(method, TextContainsMethod))
+        if (Equals(method, TextContainsMethod))
+        {
+            if (arguments.Count != 3)
+            {
+                return null;
+            }
+
+            return TranslateSingle(arguments[1], arguments[2]);
+        }
+
+        if (!TextContainsAnyMethods.Contains(method) || arguments.Count < 4)
         {
             return null;
         }
 
-        if (arguments.Count != 3)
-        {
-            return null;
-        }
+        var value = arguments[1];
+        var fieldPredicates = arguments.Skip(2)
+            .Select(field => TranslateSingle(field, value))
+            .ToArray();
 
-        var field = arguments[1];
-        var value = arguments[2];
+        return fieldPredicates.Aggregate(_sqlExpressionFactory.OrElse);
+    }
 
-        return _databaseProvider.Name switch
+    private SqlExpression TranslateSingle(SqlExpression field, SqlExpression value)
+        => _databaseProvider.Name switch
         {
             ProviderNames.Npgsql => PostgreSqlTextContainsTranslator.Translate(_sqlExpressionFactory, _typeMappingSource, field, value),
             ProviderNames.Sqlite => SqliteTextContainsTranslator.Translate(_model, _sqlExpressionFactory, _typeMappingSource, field, value),
             _ => null
-        };
-    }
+        } ?? throw new InvalidOperationException("PortableTextSearch does not support the configured database provider.");
 }

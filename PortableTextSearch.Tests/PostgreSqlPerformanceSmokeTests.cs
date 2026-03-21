@@ -52,15 +52,15 @@ public sealed class PostgreSqlPerformanceSmokeTests(ITestOutputHelper output)
             timedIterations: TimedIterations,
             queriesPerIteration: QueriesPerIteration,
             naivePropertyName: nameof(PostgreSqlWorkflowRecipient.UnindexedEmail),
-            collectDiagnosticsAsync: (context, term) => CollectDiagnosticsAsync(context, term));
+            collectDiagnosticsAsync: CollectDiagnosticsAsync);
     }
 
     private static async Task<TextSearchPerformanceSmokeTestHarness.PerformanceDiagnostics> CollectDiagnosticsAsync(
         PostgreSqlWorkflowContext context,
         string term)
     {
-        var textSearchPropertyName = nameof(PostgreSqlWorkflowRecipient.Email);
-        var naivePropertyName = nameof(PostgreSqlWorkflowRecipient.UnindexedEmail);
+        const string textSearchPropertyName = nameof(PostgreSqlWorkflowRecipient.Email);
+        const string naivePropertyName = nameof(PostgreSqlWorkflowRecipient.UnindexedEmail);
         var ftsQuery = TextSearchPerformanceSmokeTestHarness
             .CreateFtsQuery<PostgreSqlWorkflowRecipient>(context, textSearchPropertyName, term);
         var naiveQuery = TextSearchPerformanceSmokeTestHarness

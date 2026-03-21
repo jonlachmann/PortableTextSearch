@@ -36,12 +36,12 @@ public sealed class PostgreSqlWorkflowContext(DbContextOptions<PostgreSqlWorkflo
 
 public sealed class PostgreSqlWorkflowRecipient
 {
-    public int Id { get; set; }
+    public int Id { get; init; }
 
     [MaxLength(128)]
-    public string MessageId { get; set; } = null!;
+    public string MessageId { get; init; } = null!;
 
-    public int Type { get; set; }
+    public int Type { get; init; }
 
     [MaxLength(256)]
     public string? Email { get; set; }

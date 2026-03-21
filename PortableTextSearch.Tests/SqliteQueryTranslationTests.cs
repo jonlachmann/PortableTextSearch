@@ -40,6 +40,34 @@ public sealed class SqliteQueryTranslationTests
     }
 
     [Fact]
+    public void TextContainsAny_translates_to_an_or_of_fts_searches()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContainsAny("alice", x.Email, x.Name))
+            .ToQueryString();
+
+        sql.Should().Contain("\"Email\" MATCH 'alice'");
+        sql.Should().Contain("\"Name\" MATCH 'alice'");
+        sql.Should().Contain(" OR ");
+    }
+
+    [Fact]
+    public void TextContainsAny_supports_six_fields()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContainsAny("alice", x.Email, x.Name, x.Email, x.Name, x.Email, x.Name))
+            .ToQueryString();
+
+        sql.Should().Contain("\"Email\" MATCH 'alice'");
+        sql.Should().Contain("\"Name\" MATCH 'alice'");
+        sql.Should().Contain(" OR ");
+    }
+
+    [Fact]
     public void TextContains_remains_server_translatable()
     {
         var action = () =>

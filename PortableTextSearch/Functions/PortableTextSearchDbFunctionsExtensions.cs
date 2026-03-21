@@ -24,4 +24,44 @@ public static class PortableTextSearchDbFunctionsExtensions
     public static bool TextContains(this DbFunctions _, string? field, string? value)
         => throw new InvalidOperationException(
             "PortableTextSearchDbFunctionsExtensions.TextContains can only be used inside LINQ queries translated by EF Core.");
+
+    /// <summary>
+    /// Tests whether any of two mapped text fields contains the provided search value.
+    /// </summary>
+    [DbFunction("text_contains_any")]
+    public static bool TextContainsAny(this DbFunctions _, string? value, string? field1, string? field2)
+        => throw new InvalidOperationException(
+            "PortableTextSearchDbFunctionsExtensions.TextContainsAny can only be used inside LINQ queries translated by EF Core.");
+
+    /// <summary>
+    /// Tests whether any of three mapped text fields contains the provided search value.
+    /// </summary>
+    [DbFunction("text_contains_any")]
+    public static bool TextContainsAny(this DbFunctions _, string? value, string? field1, string? field2, string? field3)
+        => throw new InvalidOperationException(
+            "PortableTextSearchDbFunctionsExtensions.TextContainsAny can only be used inside LINQ queries translated by EF Core.");
+
+    /// <summary>
+    /// Tests whether any of four mapped text fields contains the provided search value.
+    /// </summary>
+    [DbFunction("text_contains_any")]
+    public static bool TextContainsAny(this DbFunctions _, string? value, string? field1, string? field2, string? field3, string? field4)
+        => throw new InvalidOperationException(
+            "PortableTextSearchDbFunctionsExtensions.TextContainsAny can only be used inside LINQ queries translated by EF Core.");
+
+    /// <summary>
+    /// Tests whether any of five mapped text fields contains the provided search value.
+    /// </summary>
+    [DbFunction("text_contains_any")]
+    public static bool TextContainsAny(this DbFunctions _, string? value, string? field1, string? field2, string? field3, string? field4, string? field5)
+        => throw new InvalidOperationException(
+            "PortableTextSearchDbFunctionsExtensions.TextContainsAny can only be used inside LINQ queries translated by EF Core.");
+
+    /// <summary>
+    /// Tests whether any of six mapped text fields contains the provided search value.
+    /// </summary>
+    [DbFunction("text_contains_any")]
+    public static bool TextContainsAny(this DbFunctions _, string? value, string? field1, string? field2, string? field3, string? field4, string? field5, string? field6)
+        => throw new InvalidOperationException(
+            "PortableTextSearchDbFunctionsExtensions.TextContainsAny can only be used inside LINQ queries translated by EF Core.");
 }
