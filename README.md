@@ -1,6 +1,6 @@
 # PortableTextSearch
 
-PortableTextSearch is a small EF Core library that adds a provider-neutral `EF.Functions.TextContains(...)` API for substring search on PostgreSQL and SQLite.
+PortableTextSearch is a small EF Core library that adds provider-neutral `EF.Functions.TextContains(...)` and `EF.Functions.TextContainsAny(...)` APIs for substring search on PostgreSQL and SQLite.
 
 The repository now ships separate package lines for EF Core 8, 9, and 10. The public API stays the same across all three lines, but the package version must match the EF Core major version used by the consuming application.
 
@@ -45,6 +45,48 @@ Example installation:
 dotnet add package PortableTextSearch.EntityFrameworkCore --version 9.0.0
 ```
 
+## Consuming app checklist
+
+1. Install the package version matching your EF Core major version.
+2. Register the provider and PortableTextSearch on the same `DbContextOptionsBuilder`.
+3. Mark searchable string properties with `HasTextSearch(...)`.
+4. Query with `EF.Functions.TextContains(...)` or `EF.Functions.TextContainsAny(...)`.
+5. If you want helper-based scaffolded migrations, add the design-time shim in the startup project.
+6. Scaffold and apply migrations as usual with `dotnet ef migrations add ...` and `dotnet ef database update`.
+
+Minimal setup:
+
+```csharp
+optionsBuilder
+    .UseSqlite(connectionString)
+    .UsePortableTextSearch();
+```
+
+```csharp
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    modelBuilder.Entity<MessageRecipient>()
+        .HasTextSearch(x => x.Email)
+        .HasTextSearch(x => x.Name);
+}
+```
+
+If you want scaffolded migrations to call the PortableTextSearch helper methods instead of raw `migrationBuilder.Sql(...)`, add a small EF design-time shim to the startup project where you run `dotnet ef`:
+
+```csharp
+using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.DependencyInjection;
+using PortableTextSearch.Design;
+
+internal sealed class DesignTimeServices : IDesignTimeServices
+{
+    public void ConfigureDesignTimeServices(IServiceCollection services)
+    {
+        new PortableTextSearchDesignTimeServices().ConfigureDesignTimeServices(services);
+    }
+}
+```
+
 ## Configure searchable fields
 
 Mark mapped string properties with `HasTextSearch(...)` in model configuration:
@@ -72,7 +114,7 @@ var recipients = await context.MessageRecipients
     .ToListAsync();
 ```
 
-For multi-field search, compose ordinary LINQ:
+For multi-field search, you can either compose ordinary LINQ:
 
 ```csharp
 var recipients = await context.MessageRecipients
@@ -82,7 +124,28 @@ var recipients = await context.MessageRecipients
     .ToListAsync();
 ```
 
-`TextContains` is intended only for EF-translated LINQ. It throws if evaluated client-side.
+Or use `TextContainsAny(...)` for 2-6 fields:
+
+```csharp
+var recipients = await context.MessageRecipients
+    .Where(x => EF.Functions.TextContainsAny("alice", x.Email, x.Name))
+    .ToListAsync();
+```
+
+```csharp
+var recipients = await context.MessageRecipients
+    .Where(x => EF.Functions.TextContainsAny(
+        "alice",
+        x.Email,
+        x.Name,
+        x.AddressLine1,
+        x.AddressLine2,
+        x.CompanyName,
+        x.Notes))
+    .ToListAsync();
+```
+
+`TextContains` and `TextContainsAny` are intended only for EF-translated LINQ. They throw if evaluated client-side.
 
 ## Provider behavior
 
@@ -113,7 +176,7 @@ protected override void Up(MigrationBuilder migrationBuilder)
 }
 ```
 
-When a migration is scaffolded from `HasTextSearch(...)`, PortableTextSearch emits the equivalent SQL automatically. The helpers below remain available if you prefer to write or customize the migration by hand.
+When a migration is scaffolded from `HasTextSearch(...)`, PortableTextSearch can emit the equivalent helper-method calls automatically when the design-time shim above is present. The helpers below remain available if you prefer to write or customize the migration by hand.
 
 These helpers emit SQL for:
 
@@ -147,7 +210,7 @@ protected override void Up(MigrationBuilder migrationBuilder)
 }
 ```
 
-When a migration is scaffolded from `HasTextSearch(...)`, PortableTextSearch emits the equivalent SQL automatically. The helper remains available if you want to author the migration explicitly.
+When a migration is scaffolded from `HasTextSearch(...)`, PortableTextSearch can emit the equivalent helper-method calls automatically when the design-time shim above is present. The helper remains available if you want to author the migration explicitly.
 
 The helper creates:
 
@@ -207,10 +270,12 @@ Environment overrides are also supported:
 - `PORTABLE_TEXT_SEARCH_POSTGRES_ADMIN_CONNECTION`
 - `PORTABLE_TEXT_SEARCH_POSTGRES_DATABASE_NAME`
 
-## Current scope
+## EF version differences
 
-The current public query API is intentionally small:
+The package lines share the same public API and the same behavior goals. The main differences between EF Core 8, 9, and 10 support are internal:
 
-- `EF.Functions.TextContains(field, value)`
+- EF8 uses older internal constructor and SQL-processor signatures in the SQLite query pipeline.
+- EF9 and EF10 use newer `SelectExpression` and relational SQL-processor shapes.
+- EF10 requires a different relational parameter-based SQL processor entry point than EF8/EF9.
 
-That keeps the translation surface simple and portable. Multi-field search is composed with normal LINQ rather than a custom params-based API.
+That version-specific code is isolated to the provider-integration layer. The public APIs, migration helpers, and test coverage stay aligned across all three package lines.
