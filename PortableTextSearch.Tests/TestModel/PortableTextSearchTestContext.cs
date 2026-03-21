@@ -13,7 +13,9 @@ public sealed class PortableTextSearchTestContext(DbContextOptions<PortableTextS
         {
             builder.ToTable("MessageRecipients");
             builder.HasKey(x => x.Id);
-            builder.Property(x => x.MessageId).IsRequired();
+            builder.Property(x => x.MessageId).HasMaxLength(128).IsRequired();
+            builder.Property(x => x.Email).HasMaxLength(256);
+            builder.Property(x => x.Name).HasMaxLength(256);
             builder.HasTextSearch(x => x.Email)
                 .HasTextSearch(x => x.Name);
         });

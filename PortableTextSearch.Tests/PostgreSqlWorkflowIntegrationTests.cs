@@ -1,19 +1,12 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql;
-using PortableTextSearch.Configuration;
 using PortableTextSearch.Functions;
-using PortableTextSearch.Migrations;
 using PortableTextSearch.Query;
 
 namespace PortableTextSearch.Tests;
 
 public sealed class PostgreSqlWorkflowIntegrationTests
 {
-    private const string SchemaName = "pts_pgsql_workflow";
-
     [RequiresPostgresFact]
     public async Task Migration_and_query_workflow_runs_against_postgresql()
     {
@@ -27,7 +20,7 @@ public sealed class PostgreSqlWorkflowIntegrationTests
                 connectionString,
                 npgsql => npgsql
                     .MigrationsAssembly(typeof(PostgreSqlWorkflowContext).Assembly.FullName)
-                    .MigrationsHistoryTable("__EFMigrationsHistory", SchemaName))
+                    .MigrationsHistoryTable("__EFMigrationsHistory", PostgreSqlWorkflowFixture.SchemaName))
             .UsePortableTextSearch()
             .Options;
 
@@ -35,20 +28,22 @@ public sealed class PostgreSqlWorkflowIntegrationTests
         {
             await setupContext.Database.MigrateAsync();
 
-            setupContext.Recipients.Add(new WorkflowRecipient
+            setupContext.Recipients.Add(new PostgreSqlWorkflowRecipient
             {
                 Id = 1,
                 MessageId = "message-1",
                 Type = 7,
                 Email = "alice@example.com",
+                UnindexedEmail = "alice@example.com",
                 Name = "Alice Johnson"
             });
-            setupContext.Recipients.Add(new WorkflowRecipient
+            setupContext.Recipients.Add(new PostgreSqlWorkflowRecipient
             {
                 Id = 2,
                 MessageId = "message-2",
                 Type = 7,
                 Email = "bob@example.com",
+                UnindexedEmail = "bob@example.com",
                 Name = "Alice Cooper"
             });
 
@@ -86,6 +81,7 @@ public sealed class PostgreSqlWorkflowIntegrationTests
                 .ToListAsync())
                 .Single();
             recipient.Email = "carol@example.com";
+            recipient.UnindexedEmail = "carol@example.com";
             recipient.Name = "Carol Stone";
             await updateContext.SaveChangesAsync();
         }
@@ -137,76 +133,6 @@ public sealed class PostgreSqlWorkflowIntegrationTests
 
             remainingMatches.Should().ContainSingle()
                 .Which.Id.Should().Be(2);
-        }
-    }
-
-    public sealed class PostgreSqlWorkflowContext(DbContextOptions<PostgreSqlWorkflowContext> options) : DbContext(options)
-    {
-        public DbSet<WorkflowRecipient> Recipients => Set<WorkflowRecipient>();
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.HasDefaultSchema(SchemaName);
-
-            modelBuilder.Entity<WorkflowRecipient>(builder =>
-            {
-                builder.ToTable("MessageRecipients");
-                builder.HasKey(x => x.Id);
-                builder.Property(x => x.MessageId).IsRequired();
-                builder.HasTextSearch(x => x.Email)
-                    .HasTextSearch(x => x.Name);
-            });
-        }
-    }
-
-    public sealed class WorkflowRecipient
-    {
-        public int Id { get; set; }
-
-        public string MessageId { get; set; } = null!;
-
-        public int Type { get; set; }
-
-        public string? Email { get; set; }
-
-        public string? Name { get; set; }
-    }
-
-    [DbContext(typeof(PostgreSqlWorkflowContext))]
-    [Migration("202603210101_CreatePostgreSqlWorkflowSchema")]
-    public sealed class CreatePostgreSqlWorkflowSchemaMigration : Migration
-    {
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.EnsurePostgresTrigramExtension();
-
-            migrationBuilder.CreateTable(
-                name: "MessageRecipients",
-                schema: SchemaName,
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false),
-                    MessageId = table.Column<string>(nullable: false),
-                    Type = table.Column<int>(nullable: false),
-                    Email = table.Column<string>(nullable: true),
-                    Name = table.Column<string>(nullable: true)
-                },
-                constraints: table => table.PrimaryKey("PK_MessageRecipients", x => x.Id));
-
-            migrationBuilder.CreatePostgresTextSearchIndex(
-                table: "MessageRecipients",
-                column: "Email",
-                schema: SchemaName);
-
-            migrationBuilder.CreatePostgresTextSearchIndex(
-                table: "MessageRecipients",
-                column: "Name",
-                schema: SchemaName);
-        }
-
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.Sql($"""DROP TABLE IF EXISTS "{SchemaName}"."MessageRecipients";""");
         }
     }
 }

@@ -42,11 +42,13 @@ public sealed class SqliteQueryTranslationTests
     [Fact]
     public void TextContains_remains_server_translatable()
     {
-        using var context = CreateContext();
-
-        var action = () => context.MessageRecipients
-            .Where(x => EF.Functions.TextContains(x.Email, "alice"))
-            .ToQueryString();
+        var action = () =>
+        {
+            using var context = CreateContext();
+            _ = context.MessageRecipients
+                .Where(x => EF.Functions.TextContains(x.Email, "alice"))
+                .ToQueryString();
+        };
 
         action.Should().NotThrow();
     }

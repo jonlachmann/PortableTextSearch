@@ -38,7 +38,7 @@ public sealed class SqlitePerformanceSmokeTests(ITestOutputHelper output)
                     ? "Needle Recipient"
                     : $"Recipient {i:D5}"
             },
-            emailPropertyName: nameof(SqliteWorkflowIntegrationTests.WorkflowRecipient.Email),
+            textSearchPropertyName: nameof(SqliteWorkflowIntegrationTests.WorkflowRecipient.Email),
             seedRowCount: SeedRowCount,
             timedIterations: TimedIterations,
             queriesPerIteration: QueriesPerIteration);

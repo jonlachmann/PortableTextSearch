@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -137,7 +138,9 @@ public sealed class SqliteWorkflowIntegrationTests
             {
                 builder.ToTable("MessageRecipients");
                 builder.HasKey(x => x.Id);
-                builder.Property(x => x.MessageId).IsRequired();
+                builder.Property(x => x.MessageId).HasMaxLength(128).IsRequired();
+                builder.Property(x => x.Email).HasMaxLength(256);
+                builder.Property(x => x.Name).HasMaxLength(256);
                 builder.HasTextSearch(x => x.Email)
                     .HasTextSearch(x => x.Name);
             });
@@ -148,12 +151,15 @@ public sealed class SqliteWorkflowIntegrationTests
     {
         public int Id { get; set; }
 
+        [MaxLength(128)]
         public string MessageId { get; set; } = null!;
 
         public int Type { get; set; }
 
+        [MaxLength(256)]
         public string? Email { get; set; }
 
+        [MaxLength(256)]
         public string? Name { get; set; }
     }
 
@@ -169,10 +175,10 @@ public sealed class SqliteWorkflowIntegrationTests
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", false),
-                    MessageId = table.Column<string>(type: "TEXT", nullable: false),
+                    MessageId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Type = table.Column<int>(type: "INTEGER", nullable: false),
-                    Email = table.Column<string>(type: "TEXT", nullable: true),
-                    Name = table.Column<string>(type: "TEXT", nullable: true)
+                    Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true)
                 },
                 constraints: table => table.PrimaryKey("PK_MessageRecipients", x => x.Id));
 

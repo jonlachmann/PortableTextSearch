@@ -20,10 +20,14 @@ internal sealed class SqliteMatchExpression : SqlExpression
 
     protected override Expression VisitChildren(ExpressionVisitor visitor)
     {
-        var match = (SqlExpression)visitor.Visit(Match)!;
-        var pattern = (SqlExpression)visitor.Visit(Pattern)!;
+        var visitedMatch = visitor.Visit(Match);
+        var visitedPattern = visitor.Visit(Pattern);
+        ArgumentNullException.ThrowIfNull(visitedMatch);
+        ArgumentNullException.ThrowIfNull(visitedPattern);
+        var match = (SqlExpression)visitedMatch;
+        var pattern = (SqlExpression)visitedPattern;
 
-        return match != Match || pattern != Pattern
+        return !ReferenceEquals(match, Match) || !ReferenceEquals(pattern, Pattern)
             ? new SqliteMatchExpression(match, pattern, TypeMapping!)
             : this;
     }

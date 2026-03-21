@@ -12,14 +12,6 @@ namespace PortableTextSearch.Query;
 
 internal static class SqliteTextContainsTranslator
 {
-    private static readonly ConstructorInfo SelectExpressionAliasConstructor =
-        typeof(SelectExpression).GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(string)],
-            modifiers: null)
-        ?? throw new InvalidOperationException("Unable to locate internal SelectExpression(string) constructor.");
-
     private static readonly ConstructorInfo SelectExpressionEntityTableConstructor =
         typeof(SelectExpression).GetConstructor(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
@@ -52,8 +44,7 @@ internal static class SqliteTextContainsTranslator
         SqlExpression field,
         SqlExpression value)
     {
-        if (field is not ColumnExpression fieldColumn
-            || fieldColumn.Table is not TableExpression tableExpression)
+        if (field is not ColumnExpression { Table: TableExpression tableExpression } fieldColumn)
         {
             throw new InvalidOperationException(
                 "SQLite text search requires a direct mapped string column access configured with HasTextSearch(...).");
@@ -111,7 +102,7 @@ internal static class SqliteTextContainsTranslator
         var stringTypeMapping = fieldColumn.TypeMapping ?? value.TypeMapping ?? typeMappingSource.FindMapping(typeof(string));
         subquery.AddToProjection(subqueryRowIdColumn);
         subquery.ApplyPredicate(new SqliteMatchExpression(
-            (SqlExpression)subqueryFieldColumn.ApplyTypeMapping(stringTypeMapping!),
+            subqueryFieldColumn.ApplyTypeMapping(stringTypeMapping!),
             sqlExpressionFactory.ApplyTypeMapping(value, stringTypeMapping),
             typeMappingSource.FindMapping(typeof(bool))!));
 
@@ -168,7 +159,7 @@ internal static class SqliteTextContainsTranslator
                 SqliteTextSearchNaming.GetDefaultVirtualTableName(tableName!),
                 entityType.GetTextSearchProperties()
                     .Select(propertyName => entityType.FindProperty(propertyName)!)
-                    .Select(property => property.GetColumnName(storeObject)!)
+                    .Select(prop => prop.GetColumnName(storeObject)!)
                     .ToArray(),
                 keyProperty,
                 keyColumnName);

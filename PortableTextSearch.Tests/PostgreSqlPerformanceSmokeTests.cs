@@ -19,20 +19,20 @@ public sealed class PostgreSqlPerformanceSmokeTests(ITestOutputHelper output)
             ?? throw new InvalidOperationException("PostgreSQL test configuration is required.");
         await using var databaseScope = await PostgreSqlTestDatabaseScope.CreateAsync(configuration);
 
-        var options = new DbContextOptionsBuilder<PostgreSqlWorkflowIntegrationTests.PostgreSqlWorkflowContext>()
+        var options = new DbContextOptionsBuilder<PostgreSqlWorkflowContext>()
             .UseNpgsql(
                 databaseScope.DatabaseConnectionString,
                 npgsql => npgsql
-                    .MigrationsAssembly(typeof(PostgreSqlWorkflowIntegrationTests.PostgreSqlWorkflowContext).Assembly.FullName)
-                    .MigrationsHistoryTable("__EFMigrationsHistory", "pts_pgsql_workflow"))
+                    .MigrationsAssembly(typeof(PostgreSqlWorkflowContext).Assembly.FullName)
+                    .MigrationsHistoryTable("__EFMigrationsHistory", PostgreSqlWorkflowFixture.SchemaName))
             .UsePortableTextSearch()
             .Options;
 
         await TextSearchPerformanceSmokeTestHarness.RunAsync(
             output,
             providerName: "PostgreSQL",
-            createContext: () => new PostgreSqlWorkflowIntegrationTests.PostgreSqlWorkflowContext(options),
-            createEntity: (i, rowCount) => new PostgreSqlWorkflowIntegrationTests.WorkflowRecipient
+            createContext: () => new PostgreSqlWorkflowContext(options),
+            createEntity: (i, rowCount) => new PostgreSqlWorkflowRecipient
             {
                 Id = i,
                 MessageId = $"message-{i}",
@@ -40,26 +40,31 @@ public sealed class PostgreSqlPerformanceSmokeTests(ITestOutputHelper output)
                 Email = i == rowCount
                     ? "needle@example.com"
                     : $"user{i:D5}@example.com",
+                UnindexedEmail = i == rowCount
+                    ? "needle@example.com"
+                    : $"user{i:D5}@example.com",
                 Name = i == rowCount
                     ? "Needle Recipient"
                     : $"Recipient {i:D5}"
             },
-            emailPropertyName: nameof(PostgreSqlWorkflowIntegrationTests.WorkflowRecipient.Email),
+            textSearchPropertyName: nameof(PostgreSqlWorkflowRecipient.Email),
             seedRowCount: SeedRowCount,
             timedIterations: TimedIterations,
             queriesPerIteration: QueriesPerIteration,
+            naivePropertyName: nameof(PostgreSqlWorkflowRecipient.UnindexedEmail),
             collectDiagnosticsAsync: (context, term) => CollectDiagnosticsAsync(context, term));
     }
 
     private static async Task<TextSearchPerformanceSmokeTestHarness.PerformanceDiagnostics> CollectDiagnosticsAsync(
-        PostgreSqlWorkflowIntegrationTests.PostgreSqlWorkflowContext context,
+        PostgreSqlWorkflowContext context,
         string term)
     {
-        var emailPropertyName = nameof(PostgreSqlWorkflowIntegrationTests.WorkflowRecipient.Email);
+        var textSearchPropertyName = nameof(PostgreSqlWorkflowRecipient.Email);
+        var naivePropertyName = nameof(PostgreSqlWorkflowRecipient.UnindexedEmail);
         var ftsQuery = TextSearchPerformanceSmokeTestHarness
-            .CreateFtsQuery<PostgreSqlWorkflowIntegrationTests.WorkflowRecipient>(context, emailPropertyName, term);
+            .CreateFtsQuery<PostgreSqlWorkflowRecipient>(context, textSearchPropertyName, term);
         var naiveQuery = TextSearchPerformanceSmokeTestHarness
-            .CreateNaiveQuery<PostgreSqlWorkflowIntegrationTests.WorkflowRecipient>(context, emailPropertyName, term);
+            .CreateNaiveQuery<PostgreSqlWorkflowRecipient>(context, naivePropertyName, term);
 
         var ftsSql = ftsQuery.ToQueryString();
         var naiveSql = naiveQuery.ToQueryString();

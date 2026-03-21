@@ -13,14 +13,17 @@ internal static class TextSearchPerformanceSmokeTestHarness
         string providerName,
         Func<TContext> createContext,
         Func<int, int, TEntity> createEntity,
-        string emailPropertyName,
+        string textSearchPropertyName,
         int seedRowCount,
         int timedIterations,
         int queriesPerIteration,
+        string? naivePropertyName = null,
         Func<TContext, string, Task<PerformanceDiagnostics>>? collectDiagnosticsAsync = null)
         where TContext : DbContext
         where TEntity : class
     {
+        naivePropertyName ??= textSearchPropertyName;
+
         await using (var setupContext = createContext())
         {
             await setupContext.Database.MigrateAsync();
@@ -38,8 +41,8 @@ internal static class TextSearchPerformanceSmokeTestHarness
 
         await using (var warmupContext = createContext())
         {
-            _ = await CreateFtsQuery<TEntity>(warmupContext, emailPropertyName, term).CountAsync();
-            _ = await CreateNaiveQuery<TEntity>(warmupContext, emailPropertyName, term).CountAsync();
+            _ = await CreateFtsQuery<TEntity>(warmupContext, textSearchPropertyName, term).CountAsync();
+            _ = await CreateNaiveQuery<TEntity>(warmupContext, naivePropertyName, term).CountAsync();
         }
 
         var ftsTimes = new List<long>();
@@ -53,7 +56,7 @@ internal static class TextSearchPerformanceSmokeTestHarness
             var ftsStopwatch = Stopwatch.StartNew();
             for (var run = 0; run < queriesPerIteration; run++)
             {
-                ftsCount = await CreateFtsQuery<TEntity>(ftsContext, emailPropertyName, term).CountAsync();
+                ftsCount = await CreateFtsQuery<TEntity>(ftsContext, textSearchPropertyName, term).CountAsync();
             }
             ftsStopwatch.Stop();
             ftsTimes.Add(ftsStopwatch.ElapsedTicks);
@@ -62,7 +65,7 @@ internal static class TextSearchPerformanceSmokeTestHarness
             var naiveStopwatch = Stopwatch.StartNew();
             for (var run = 0; run < queriesPerIteration; run++)
             {
-                naiveCount = await CreateNaiveQuery<TEntity>(naiveContext, emailPropertyName, term).CountAsync();
+                naiveCount = await CreateNaiveQuery<TEntity>(naiveContext, naivePropertyName, term).CountAsync();
             }
             naiveStopwatch.Stop();
             naiveTimes.Add(naiveStopwatch.ElapsedTicks);
@@ -75,8 +78,8 @@ internal static class TextSearchPerformanceSmokeTestHarness
         output.WriteLine($"Seeded rows: {seedRowCount}");
         output.WriteLine($"Timed iterations: {timedIterations}");
         output.WriteLine($"Queries per iteration: {queriesPerIteration}");
-        output.WriteLine($"FTS query SQL shape uses library API: EF.Functions.TextContains(EF.Property<string?>(x, \"{emailPropertyName}\"), \"{term}\")");
-        output.WriteLine($"Naive query SQL shape uses Contains: EF.Property<string?>(x, \"{emailPropertyName}\") != null && EF.Property<string?>(x, \"{emailPropertyName}\")!.Contains(\"{term}\")");
+        output.WriteLine($"FTS query SQL shape uses library API: EF.Functions.TextContains(EF.Property<string?>(x, \"{textSearchPropertyName}\"), \"{term}\")");
+        output.WriteLine($"Naive query SQL shape uses Contains: EF.Property<string?>(x, \"{naivePropertyName}\") != null && EF.Property<string?>(x, \"{naivePropertyName}\")!.Contains(\"{term}\")");
         output.WriteLine($"Stopwatch frequency: {Stopwatch.Frequency} ticks/second");
         output.WriteLine($"FTS timings ticks: {string.Join(", ", ftsTimes)}");
         output.WriteLine($"Naive timings ticks: {string.Join(", ", naiveTimes)}");

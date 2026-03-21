@@ -12,8 +12,7 @@ internal static class PropertyExpressionValidator
         LambdaExpression propertyExpression)
         where TEntity : class
     {
-        var memberExpression = Unwrap(propertyExpression.Body) as MemberExpression;
-        if (memberExpression is null || memberExpression.Expression != propertyExpression.Parameters[0])
+        if (Unwrap(propertyExpression.Body) is not MemberExpression memberExpression || memberExpression.Expression != propertyExpression.Parameters[0])
         {
             throw new ArgumentException(
                 $"Expression '{propertyExpression}' must be a simple property access like 'x => x.Email'.",

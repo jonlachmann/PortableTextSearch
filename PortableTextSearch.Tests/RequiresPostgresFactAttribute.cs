@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace PortableTextSearch.Tests;
 
 /// <summary>

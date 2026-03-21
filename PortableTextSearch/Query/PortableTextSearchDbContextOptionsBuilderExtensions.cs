@@ -13,7 +13,7 @@ public static class PortableTextSearchDbContextOptionsBuilderExtensions
     /// </summary>
     /// <param name="optionsBuilder">The options builder.</param>
     /// <returns>The same options builder for chaining.</returns>
-    public static DbContextOptionsBuilder UsePortableTextSearch(this DbContextOptionsBuilder optionsBuilder)
+    private static void UsePortableTextSearch(this DbContextOptionsBuilder optionsBuilder)
     {
         ArgumentNullException.ThrowIfNull(optionsBuilder);
 
@@ -21,7 +21,6 @@ public static class PortableTextSearchDbContextOptionsBuilderExtensions
             ?? new PortableTextSearchOptionsExtension();
 
         ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(extension);
-        return optionsBuilder;
     }
 
     /// <summary>
@@ -36,7 +35,7 @@ public static class PortableTextSearchDbContextOptionsBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(optionsBuilder);
 
-        UsePortableTextSearch((DbContextOptionsBuilder)optionsBuilder);
+        ((DbContextOptionsBuilder)optionsBuilder).UsePortableTextSearch();
         return optionsBuilder;
     }
 }
