@@ -66,8 +66,7 @@ optionsBuilder
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
     modelBuilder.Entity<MessageRecipient>()
-        .HasTextSearch(x => x.Email)
-        .HasTextSearch(x => x.Name);
+        .HasTextSearch(x => x.Email, x => x.Name);
 }
 ```
 
@@ -95,8 +94,7 @@ Mark mapped string properties with `HasTextSearch(...)` in model configuration:
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
     modelBuilder.Entity<MessageRecipient>()
-        .HasTextSearch(x => x.Email)
-        .HasTextSearch(x => x.Name);
+        .HasTextSearch(x => x.Email, x => x.Name);
 }
 ```
 

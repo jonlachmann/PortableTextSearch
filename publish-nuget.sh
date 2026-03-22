@@ -14,15 +14,15 @@ if [[ -z "${NUGET_API_KEY:-}" ]]; then
 fi
 
 packages=(
-  "PortableTextSearch.EntityFrameworkCore.8.0.0-alpha.1.nupkg"
-  "PortableTextSearch.EntityFrameworkCore.9.0.9-alpha.1.nupkg"
-  "PortableTextSearch.EntityFrameworkCore.10.0.0-alpha.1.nupkg"
+  "PortableTextSearch.EntityFrameworkCore.8.0.0-alpha.4.nupkg"
+  "PortableTextSearch.EntityFrameworkCore.9.0.9-alpha.4.nupkg"
+  "PortableTextSearch.EntityFrameworkCore.10.0.0-alpha.4.nupkg"
 )
 
 symbols=(
-  "PortableTextSearch.EntityFrameworkCore.8.0.0-alpha.1.snupkg"
-  "PortableTextSearch.EntityFrameworkCore.9.0.9-alpha.1.snupkg"
-  "PortableTextSearch.EntityFrameworkCore.10.0.0-alpha.1.snupkg"
+  "PortableTextSearch.EntityFrameworkCore.8.0.0-alpha.4.snupkg"
+  "PortableTextSearch.EntityFrameworkCore.9.0.9-alpha.4.snupkg"
+  "PortableTextSearch.EntityFrameworkCore.10.0.0-alpha.4.snupkg"
 )
 
 for package in "${packages[@]}"; do

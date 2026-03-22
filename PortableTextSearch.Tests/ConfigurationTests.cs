@@ -37,6 +37,20 @@ public sealed class ConfigurationTests
     }
 
     [Fact]
+    public void HasTextSearch_supports_multiple_fields_in_a_single_call()
+    {
+        var options = new DbContextOptionsBuilder<MultiFieldContext>()
+            .UseSqlite("Data Source=multi-fields.db")
+            .UsePortableTextSearch()
+            .Options;
+
+        using var context = new MultiFieldContext(options);
+        var entityType = context.Model.FindEntityType(typeof(MessageRecipient));
+
+        entityType!.GetTextSearchProperties().Should().Equal("Email", "Name");
+    }
+
+    [Fact]
     public void HasTextSearch_stores_deterministic_annotation_values()
     {
         using var firstContext = CreateSqliteContext();
@@ -72,6 +86,17 @@ public sealed class ConfigurationTests
             .WithMessage("*must be of type string*");
     }
 
+    [Fact]
+    public void HasTextSearch_rejects_invalid_expressions_in_multi_field_calls()
+    {
+        var action = () => BuildModel<InvalidMultiFieldContext>(
+            builder => builder.UseSqlite("Data Source=invalid-multi-field.db"));
+
+        action.Should()
+            .Throw<ArgumentException>()
+            .WithMessage("*simple property access*");
+    }
+
     private static PortableTextSearchTestContext CreateSqliteContext()
         => BuildContext<PortableTextSearchTestContext>(builder => builder.UseSqlite("Data Source=metadata.db"));
 
@@ -105,6 +130,18 @@ public sealed class ConfigurationTests
         }
     }
 
+    private sealed class MultiFieldContext(DbContextOptions<MultiFieldContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<MessageRecipient>(builder =>
+            {
+                builder.HasKey(x => x.Id);
+                builder.HasTextSearch(x => x.Email, x => x.Name);
+            });
+        }
+    }
+
     private sealed class InvalidExpressionContext(DbContextOptions<InvalidExpressionContext> options) : DbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -125,6 +162,18 @@ public sealed class ConfigurationTests
             {
                 builder.HasKey(x => x.Id);
                 builder.HasTextSearch(x => x.Type);
+            });
+        }
+    }
+
+    private sealed class InvalidMultiFieldContext(DbContextOptions<InvalidMultiFieldContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<MessageRecipient>(builder =>
+            {
+                builder.HasKey(x => x.Id);
+                builder.HasTextSearch(x => x.Email, x => x.Name == null ? null : x.Name.Trim());
             });
         }
     }
