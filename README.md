@@ -124,7 +124,7 @@ var recipients = await context.MessageRecipients
     .ToListAsync();
 ```
 
-Or use `TextContainsAny(...)` for 2-6 fields:
+Or use `TextContainsAny(...)` for 2-32 fields:
 
 ```csharp
 var recipients = await context.MessageRecipients

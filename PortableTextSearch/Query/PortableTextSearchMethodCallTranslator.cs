@@ -17,25 +17,15 @@ internal sealed class PortableTextSearchMethodCallTranslator : IMethodCallTransl
         .GetRuntimeMethod(
             nameof(PortableTextSearchDbFunctionsExtensions.TextContains),
             [typeof(DbFunctions), typeof(string), typeof(string)])!;
-    private static readonly HashSet<MethodInfo> TextContainsAnyMethods =
-    [
-        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
-            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
-            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string)])!,
-        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
-            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
-            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string)])!,
-        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
-            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
-            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string)])!
-        ,
-        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
-            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
-            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string)])!,
-        typeof(PortableTextSearchDbFunctionsExtensions).GetRuntimeMethod(
-            nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny),
-            [typeof(DbFunctions), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string)])!
-    ];
+    private static readonly HashSet<MethodInfo> TextContainsAnyMethods = typeof(PortableTextSearchDbFunctionsExtensions)
+        .GetRuntimeMethods()
+        .Where(method =>
+            method.Name == nameof(PortableTextSearchDbFunctionsExtensions.TextContainsAny) &&
+            method.ReturnType == typeof(bool) &&
+            method.GetParameters() is [var dbFunctions, var value, ..] &&
+            dbFunctions.ParameterType == typeof(DbFunctions) &&
+            value.ParameterType == typeof(string))
+        .ToHashSet();
 
     private readonly IDatabaseProvider _databaseProvider;
     private readonly IModel _model;

@@ -54,12 +54,45 @@ public sealed class SqliteQueryTranslationTests
     }
 
     [Fact]
-    public void TextContainsAny_supports_six_fields()
+    public void TextContainsAny_supports_thirty_two_fields()
     {
         using var context = CreateContext();
 
         var sql = context.MessageRecipients
-            .Where(x => EF.Functions.TextContainsAny("alice", x.Email, x.Name, x.Email, x.Name, x.Email, x.Name))
+            .Where(x => EF.Functions.TextContainsAny(
+                "alice",
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name,
+                x.Email,
+                x.Name))
             .ToQueryString();
 
         sql.Should().Contain("\"Email\" MATCH 'alice'");
