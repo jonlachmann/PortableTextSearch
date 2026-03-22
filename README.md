@@ -42,7 +42,7 @@ optionsBuilder
 Example installation:
 
 ```bash
-dotnet add package PortableTextSearch.EntityFrameworkCore --version 9.0.0
+dotnet add package PortableTextSearch.EntityFrameworkCore --version 9.0.9-alpha.1
 ```
 
 ## Consuming app checklist
