@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 using Microsoft.EntityFrameworkCore.Storage;
+using PortableTextSearch;
 using PortableTextSearch.Configuration;
 using PortableTextSearch.Internal;
 
@@ -78,12 +79,18 @@ internal static class SqliteTextContainsTranslator
         ISqlExpressionFactory sqlExpressionFactory,
         IRelationalTypeMappingSource typeMappingSource,
         SqlExpression field,
-        SqlExpression value)
+        SqlExpression value,
+        SqlExpression mode)
     {
         if (field is not ColumnExpression fieldColumn)
         {
             throw new InvalidOperationException(
                 "SQLite text search requires a direct mapped string column access configured with HasTextSearch(...).");
+        }
+
+        if (mode is not SqlConstantExpression { Value: TextSearchMode textSearchMode })
+        {
+            throw new InvalidOperationException("SQLite text search mode must be a constant enum value.");
         }
 
         var searchInfo = ResolveFtsSearch(model, fieldColumn);
@@ -165,6 +172,7 @@ internal static class SqliteTextContainsTranslator
         subquery.ApplyPredicate(new SqliteMatchExpression(
             subqueryFieldColumn.ApplyTypeMapping(stringTypeMapping!),
             sqlExpressionFactory.ApplyTypeMapping(value, stringTypeMapping),
+            textSearchMode,
             typeMappingSource.FindMapping(typeof(bool))!));
 #if !PORTABLETEXTSEARCH_EF8
         subquery.ApplyProjection();

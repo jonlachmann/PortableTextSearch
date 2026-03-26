@@ -3,6 +3,7 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 using Microsoft.EntityFrameworkCore.Storage;
+using PortableTextSearch;
 
 namespace PortableTextSearch.Query;
 
@@ -10,19 +11,22 @@ internal sealed class SqliteMatchExpression : SqlExpression
 {
     private static readonly ConstructorInfo QuoteConstructor =
         typeof(SqliteMatchExpression).GetConstructor(
-            [typeof(SqlExpression), typeof(SqlExpression), typeof(RelationalTypeMapping)])
+            [typeof(SqlExpression), typeof(SqlExpression), typeof(TextSearchMode), typeof(RelationalTypeMapping)])
         ?? throw new InvalidOperationException("Unable to locate SqliteMatchExpression quoting constructor.");
 
-    public SqliteMatchExpression(SqlExpression match, SqlExpression pattern, RelationalTypeMapping typeMapping)
+    public SqliteMatchExpression(SqlExpression match, SqlExpression pattern, TextSearchMode mode, RelationalTypeMapping typeMapping)
         : base(typeof(bool), typeMapping)
     {
         Match = match;
         Pattern = pattern;
+        Mode = mode;
     }
 
     public SqlExpression Match { get; }
 
     public SqlExpression Pattern { get; }
+
+    public TextSearchMode Mode { get; }
 
     protected override Expression VisitChildren(ExpressionVisitor visitor)
     {
@@ -34,7 +38,7 @@ internal sealed class SqliteMatchExpression : SqlExpression
         var pattern = (SqlExpression)visitedPattern;
 
         return !ReferenceEquals(match, Match) || !ReferenceEquals(pattern, Pattern)
-            ? new SqliteMatchExpression(match, pattern, TypeMapping!)
+            ? new SqliteMatchExpression(match, pattern, Mode, TypeMapping!)
             : this;
     }
 
@@ -51,6 +55,7 @@ internal sealed class SqliteMatchExpression : SqlExpression
             QuoteConstructor,
             Expression.Constant(Match, typeof(SqlExpression)),
             Expression.Constant(Pattern, typeof(SqlExpression)),
+            Expression.Constant(Mode),
             Expression.Constant(TypeMapping, typeof(RelationalTypeMapping)));
 #endif
 }

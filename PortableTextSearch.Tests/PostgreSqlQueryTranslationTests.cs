@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using PortableTextSearch;
 using PortableTextSearch.Functions;
 using PortableTextSearch.Query;
 using PortableTextSearch.Tests.TestModel;
@@ -20,6 +21,59 @@ public sealed class PostgreSqlQueryTranslationTests
         sql.Should().Contain("ILIKE");
         sql.Should().Contain("%");
         sql.Should().Contain("\"Email\"");
+    }
+
+    [Fact]
+    public void TextContains_defaults_to_any_terms()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContains(x.Email, "alice bob"))
+            .ToQueryString();
+
+        sql.Should().Contain("ILIKE");
+        sql.Should().Contain(" OR ");
+    }
+
+    [Fact]
+    public void TextContains_supports_all_terms_mode()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContains(x.Email, "alice bob", TextSearchMode.AllTerms))
+            .ToQueryString();
+
+        sql.Should().Contain("ILIKE");
+        sql.Should().Contain(" AND ");
+    }
+
+    [Fact]
+    public void TextContains_supports_phrase_mode()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContains(x.Email, "alice bob", TextSearchMode.Phrase))
+            .ToQueryString();
+
+        sql.Should().Contain("ILIKE");
+        sql.Should().Contain("alice bob");
+        sql.Should().NotContain(" OR ");
+    }
+
+    [Fact]
+    public void TextContains_whitespace_only_input_short_circuits()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContains(x.Email, "   "))
+            .ToQueryString();
+
+        sql.Should().Contain("FALSE");
+        sql.Should().NotContain("ILIKE");
     }
 
     [Fact]
@@ -52,6 +106,20 @@ public sealed class PostgreSqlQueryTranslationTests
         sql.Should().Contain(" OR ");
         sql.Should().Contain("\"Email\"");
         sql.Should().Contain("\"Name\"");
+    }
+
+    [Fact]
+    public void TextContainsAny_supports_trailing_mode_argument()
+    {
+        using var context = CreateContext();
+
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContainsAny("alice bob", x.Email, x.Name, TextSearchMode.AllTerms))
+            .ToQueryString();
+
+        sql.Should().Contain("ILIKE");
+        sql.Should().Contain(" OR ");
+        sql.Should().Contain(" AND ");
     }
 
     [Fact]

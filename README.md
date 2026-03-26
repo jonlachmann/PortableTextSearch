@@ -42,7 +42,7 @@ optionsBuilder
 Example installation:
 
 ```bash
-dotnet add package PortableTextSearch.EntityFrameworkCore --version 9.0.9-alpha.1
+dotnet add package PortableTextSearch.EntityFrameworkCore --version 9.0.9-alpha.6
 ```
 
 ## Consuming app checklist
@@ -112,6 +112,25 @@ var recipients = await context.MessageRecipients
     .ToListAsync();
 ```
 
+An overload with a trailing `mode` lets you choose `AnyTerms` (default), `AllTerms`, or `Phrase` parsing:
+
+```csharp
+var recipients = await context.MessageRecipients
+    .Where(x => EF.Functions.TextContains(
+        x.Email,
+        "draft query-1774300743237-8a756b7e",
+        TextSearchMode.Phrase))
+    .ToListAsync();
+```
+
+Mode semantics are intentionally small and provider-neutral:
+
+- `AnyTerms`: trim, split on whitespace only, match if any term matches
+- `AllTerms`: trim, split on whitespace only, match only if every term matches
+- `Phrase`: trim and treat the full input as one phrase
+
+Punctuation is preserved inside tokens. The library does not expose backend-specific search syntax.
+
 For multi-field search, you can either compose ordinary LINQ:
 
 ```csharp
@@ -127,6 +146,18 @@ Or use `TextContainsAny(...)` for 2-32 fields:
 ```csharp
 var recipients = await context.MessageRecipients
     .Where(x => EF.Functions.TextContainsAny("alice", x.Email, x.Name))
+    .ToListAsync();
+```
+
+There is also a trailing-`mode` overload for `TextContainsAny(...)`:
+
+```csharp
+var recipients = await context.MessageRecipients
+    .Where(x => EF.Functions.TextContainsAny(
+        "draft query-1774300743237-8a756b7e",
+        x.Email,
+        x.Name,
+        TextSearchMode.AllTerms))
     .ToListAsync();
 ```
 
@@ -149,11 +180,15 @@ var recipients = await context.MessageRecipients
 
 ### PostgreSQL
 
-`TextContains(field, value)` translates to:
+`TextContains(field, value, mode)` keeps the current `ILIKE` style and applies the portable parsing semantics conservatively:
 
 ```sql
 field ILIKE '%' || value || '%'
 ```
+
+- `AnyTerms`: OR of substring predicates for each whitespace token
+- `AllTerms`: AND of substring predicates for each whitespace token
+- `Phrase`: one substring predicate using the trimmed full input
 
 This is intended to pair with `pg_trgm` GIN indexes.
 
@@ -183,8 +218,16 @@ These helpers emit SQL for:
 
 ### SQLite
 
-`TextContains(field, value)` translates to an FTS5-backed `MATCH` query against a synchronized virtual table created by the SQLite migration helper.
+`TextContains(field, value, mode)` translates to an FTS5-backed `MATCH` query against a synchronized virtual table created by the SQLite migration helper.
 The SQLite implementation supports integer and Guid keys by storing the real entity key in an unindexed FTS column rather than relying on the FTS table's internal `rowid`.
+
+PortableTextSearch now compiles SQLite `MATCH` input itself instead of passing raw user text through to FTS5 query syntax:
+
+- `AnyTerms`: quote each whitespace-delimited token and join with `OR`
+- `AllTerms`: quote each whitespace-delimited token and join with `AND`
+- `Phrase`: quote the full trimmed input as one phrase
+
+This prevents plain user input such as `query-1774300743237-8a756b7e` from leaking into SQLite FTS parser syntax.
 
 Migration helpers:
 

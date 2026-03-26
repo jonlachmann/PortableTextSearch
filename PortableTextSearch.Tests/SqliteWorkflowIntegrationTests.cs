@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using PortableTextSearch.Configuration;
+using PortableTextSearch;
 using PortableTextSearch.Functions;
 using PortableTextSearch.Migrations;
 using PortableTextSearch.Query;
@@ -55,7 +56,7 @@ public sealed class SqliteWorkflowIntegrationTests
                 .ToQueryString();
 
             querySql.Should().Contain("MessageRecipients_TextSearch");
-            querySql.Should().Contain("\"Email\" MATCH 'alice'");
+            querySql.Should().Contain("\"Email\" MATCH '\"alice\"'");
 
             var matches = await queryContext.Recipients
                 .Where(x => EF.Functions.TextContains(x.Email, "alice"))
@@ -129,6 +130,69 @@ public sealed class SqliteWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task Query_modes_compile_user_input_without_leaking_raw_sqlite_match_syntax()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<SqliteWorkflowContext>()
+            .UseSqlite(connection, sqlite => sqlite.MigrationsAssembly(typeof(SqliteWorkflowContext).Assembly.FullName))
+            .UsePortableTextSearch()
+            .Options;
+
+        const string input = "draft query-1774300743237-8a756b7e";
+        const string quotedInput = "say \"hello\"";
+
+        await using (var setupContext = new SqliteWorkflowContext(options))
+        {
+            await setupContext.Database.MigrateAsync();
+            setupContext.Recipients.Add(new WorkflowRecipient
+            {
+                Id = 1,
+                MessageId = "message-1",
+                Type = 7,
+                Email = input,
+                Name = quotedInput
+            });
+
+            await setupContext.SaveChangesAsync();
+        }
+
+        await using (var queryContext = new SqliteWorkflowContext(options))
+        {
+            var anyTerms = await queryContext.Recipients
+                .Where(x => EF.Functions.TextContains(x.Email, input))
+                .ToListAsync();
+
+            anyTerms.Should().ContainSingle().Which.Id.Should().Be(1);
+
+            var allTerms = await queryContext.Recipients
+                .Where(x => EF.Functions.TextContains(x.Email, input, TextSearchMode.AllTerms))
+                .ToListAsync();
+
+            allTerms.Should().ContainSingle().Which.Id.Should().Be(1);
+
+            var phrase = await queryContext.Recipients
+                .Where(x => EF.Functions.TextContains(x.Email, input, TextSearchMode.Phrase))
+                .ToListAsync();
+
+            phrase.Should().ContainSingle().Which.Id.Should().Be(1);
+
+            var quotedPhrase = await queryContext.Recipients
+                .Where(x => EF.Functions.TextContains(x.Name, quotedInput, TextSearchMode.Phrase))
+                .ToListAsync();
+
+            quotedPhrase.Should().ContainSingle().Which.Id.Should().Be(1);
+
+            var blank = await queryContext.Recipients
+                .Where(x => EF.Functions.TextContains(x.Email, "   "))
+                .ToListAsync();
+
+            blank.Should().BeEmpty();
+        }
+    }
+
+    [Fact]
     public async Task Migration_and_query_workflow_supports_guid_primary_keys()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -165,7 +229,7 @@ public sealed class SqliteWorkflowIntegrationTests
 
             querySql.Should().Contain("GuidRecipients_TextSearch");
             querySql.Should().Contain("\"__pts_entity_key\"");
-            querySql.Should().Contain("\"Email\" MATCH 'guid'");
+            querySql.Should().Contain("\"Email\" MATCH '\"guid\"'");
 
             var matches = await queryContext.Recipients
                 .Where(x => EF.Functions.TextContains(x.Email, "guid"))
