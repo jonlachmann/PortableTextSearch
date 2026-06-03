@@ -80,7 +80,8 @@ internal static class SqliteTextContainsTranslator
         IRelationalTypeMappingSource typeMappingSource,
         SqlExpression field,
         SqlExpression value,
-        SqlExpression mode)
+        SqlExpression mode,
+        IReadOnlyList<string>? allColumnNames = null)
     {
         if (field is not ColumnExpression fieldColumn)
         {
@@ -93,7 +94,7 @@ internal static class SqliteTextContainsTranslator
             throw new InvalidOperationException("SQLite text search mode must be a constant enum value.");
         }
 
-        var searchInfo = ResolveFtsSearch(model, fieldColumn);
+        var searchInfo = ResolveFtsSearch(model, fieldColumn, allColumnNames);
         var ftsAlias = GetFtsAlias(searchInfo, fieldColumn);
         var keyTypeMapping = typeMappingSource.FindMapping(searchInfo.KeyProperty)!;
         var keyColumn = CreateKeyColumn(searchInfo, fieldColumn, keyTypeMapping);
@@ -182,13 +183,38 @@ internal static class SqliteTextContainsTranslator
         return sqlExpressionFactory.In(keyColumn, subquery);
     }
 
-    private static SqliteFtsSearchInfo ResolveFtsSearch(IModel model, ColumnExpression fieldColumn)
+    private static SqliteFtsSearchInfo ResolveFtsSearch(
+        IModel model,
+        ColumnExpression fieldColumn,
+        IReadOnlyList<string>? allColumnNames = null)
     {
+        // Resolve the actual table name from the column expression to avoid matching
+        // the wrong entity when multiple entities share the same column name
+        // (e.g. both ContactAddress and LocalMessageRecipient have an "Email" column).
+#if PORTABLETEXTSEARCH_EF8
+        var sourceTableName = (fieldColumn.Table as TableExpression)?.Name;
+#elif PORTABLETEXTSEARCH_EF10
+        var sourceTableName = fieldColumn.Column?.Table?.Name;
+#else
+        // EF9 ColumnExpression exposes neither Table nor Column, so we rely on
+        // allColumnNames to disambiguate when multiple entities match.
+        string? sourceTableName = null;
+#endif
+
+        SqliteFtsSearchInfo? firstMatch = null;
+
         foreach (var entityType in model.GetEntityTypes())
         {
             var tableName = entityType.GetTableName();
             var schema = entityType.GetSchema();
             if (tableName is null || !string.IsNullOrEmpty(schema))
+            {
+                continue;
+            }
+
+            // Skip entities whose table name doesn't match the column's source table.
+            if (sourceTableName is not null
+                && !string.Equals(tableName, sourceTableName, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -208,35 +234,69 @@ internal static class SqliteTextContainsTranslator
                 continue;
             }
 
-            var primaryKey = entityType.FindPrimaryKey();
-            if (primaryKey?.Properties.Count != 1)
+            // When multiple entities share the same column name, verify that this
+            // entity also contains ALL other columns from the TextContainsAny call.
+            if (allColumnNames is { Count: > 1 } && sourceTableName is null)
             {
-                throw new InvalidOperationException(
-                    $"SQLite text search on entity '{entityType.DisplayName()}' requires a single-column primary key.");
+                var textSearchProps = entityType.GetTextSearchProperties().ToHashSet(StringComparer.Ordinal);
+                var allMatch = allColumnNames.All(colName =>
+                {
+                    var prop = entityType.GetProperties()
+                        .FirstOrDefault(p => string.Equals(p.GetColumnName(storeObject), colName, StringComparison.Ordinal));
+                    return prop is not null && textSearchProps.Contains(prop.Name);
+                });
+                if (!allMatch)
+                {
+                    // This entity doesn't have all columns — remember it as a fallback
+                    // but keep looking for a better match.
+                    firstMatch ??= BuildSearchInfo(entityType, tableName!, storeObject, property);
+                    continue;
+                }
             }
 
-            var keyProperty = primaryKey.Properties[0];
+            return BuildSearchInfo(entityType, tableName!, storeObject, property);
+        }
 
-            var keyColumnName = keyProperty.GetColumnName(storeObject);
-            if (string.IsNullOrWhiteSpace(keyColumnName))
-            {
-                throw new InvalidOperationException(
-                    $"SQLite text search on entity '{entityType.DisplayName()}' requires a mapped primary key column.");
-            }
-
-            return new SqliteFtsSearchInfo(
-                entityType,
-                SqliteTextSearchNaming.GetDefaultVirtualTableName(tableName!),
-                entityType.GetTextSearchProperties()
-                    .Select(propertyName => entityType.FindProperty(propertyName)!)
-                    .Select(prop => prop.GetColumnName(storeObject)!)
-                    .ToArray(),
-                keyProperty,
-                keyColumnName);
+        if (firstMatch.HasValue)
+        {
+            return firstMatch.Value;
         }
 
         throw new InvalidOperationException(
             $"Column '{fieldColumn.Name}' on SQLite must be configured with HasTextSearch(...) before EF.Functions.TextContains can translate it.");
+    }
+
+    private static SqliteFtsSearchInfo BuildSearchInfo(
+        IEntityType entityType,
+        string tableName,
+        StoreObjectIdentifier storeObject,
+        IProperty matchedProperty)
+    {
+        var primaryKey = entityType.FindPrimaryKey();
+        if (primaryKey?.Properties.Count != 1)
+        {
+            throw new InvalidOperationException(
+                $"SQLite text search on entity '{entityType.DisplayName()}' requires a single-column primary key.");
+        }
+
+        var keyProperty = primaryKey.Properties[0];
+
+        var keyColumnName = keyProperty.GetColumnName(storeObject);
+        if (string.IsNullOrWhiteSpace(keyColumnName))
+        {
+            throw new InvalidOperationException(
+                $"SQLite text search on entity '{entityType.DisplayName()}' requires a mapped primary key column.");
+        }
+
+        return new SqliteFtsSearchInfo(
+            entityType,
+            SqliteTextSearchNaming.GetDefaultVirtualTableName(tableName),
+            entityType.GetTextSearchProperties()
+                .Select(propertyName => entityType.FindProperty(propertyName)!)
+                .Select(prop => prop.GetColumnName(storeObject)!)
+                .ToArray(),
+            keyProperty,
+            keyColumnName);
     }
 
     private readonly record struct SqliteFtsSearchInfo(

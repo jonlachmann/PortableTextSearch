@@ -77,18 +77,30 @@ internal sealed class PortableTextSearchMethodCallTranslator : IMethodCallTransl
         var hasMode = method.GetParameters()[^1].ParameterType == typeof(TextSearchMode);
         var anyMode = hasMode ? arguments[^1] : GetDefaultModeExpression();
         var fieldCount = hasMode ? arguments.Count - 3 : arguments.Count - 2;
-        var fieldPredicates = arguments.Skip(2).Take(fieldCount)
-            .Select(field => TranslateSingle(field, value, anyMode))
+        var fields = arguments.Skip(2).Take(fieldCount).ToArray();
+
+        // Collect all column names so the SQLite translator can disambiguate
+        // when multiple entities share the same column name.
+        var allColumnNames = fields
+            .OfType<ColumnExpression>()
+            .Select(c => c.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var fieldPredicates = fields
+            .Select(field => TranslateSingle(field, value, anyMode, allColumnNames))
             .ToArray();
 
         return fieldPredicates.Aggregate(_sqlExpressionFactory.OrElse);
     }
 
-    private SqlExpression TranslateSingle(SqlExpression field, SqlExpression value, SqlExpression mode)
+    private SqlExpression TranslateSingle(
+        SqlExpression field, SqlExpression value, SqlExpression mode,
+        IReadOnlyList<string>? allColumnNames = null)
         => _databaseProvider.Name switch
         {
             ProviderNames.Npgsql => PostgreSqlTextContainsTranslator.Translate(_sqlExpressionFactory, _typeMappingSource, field, value, mode),
-            ProviderNames.Sqlite => SqliteTextContainsTranslator.Translate(_model, _sqlExpressionFactory, _typeMappingSource, field, value, mode),
+            ProviderNames.Sqlite => SqliteTextContainsTranslator.Translate(_model, _sqlExpressionFactory, _typeMappingSource, field, value, mode, allColumnNames),
             _ => null
         } ?? throw new InvalidOperationException("PortableTextSearch does not support the configured database provider.");
 

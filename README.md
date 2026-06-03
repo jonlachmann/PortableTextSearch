@@ -260,11 +260,12 @@ The helper creates:
 - a seed statement for existing rows
 - insert, update, and delete synchronization triggers
 
-Current SQLite caveat:
+Current SQLite caveats:
 
 - query translation assumes the default virtual table naming convention used by `CreateSqliteTextSearchIndex(...)`
 - custom SQLite virtual table names are supported by the migration helper, but query translation is not yet model-configurable for custom names
 - SQLite text search currently requires a single-column primary key; composite keys are supported for PostgreSQL but not for the SQLite FTS path
+- when multiple entities share the same column name with `HasTextSearch` (e.g. both `ContactAddress` and `MessageRecipient` have an `Email` column), the SQLite FTS translator uses table metadata from the `ColumnExpression` to resolve the correct FTS table. On EF Core 8 and 10+ this is definitive. On EF Core 9, the `ColumnExpression` does not expose table metadata, so the translator falls back to disambiguating by matching all column names from a `TextContainsAny` call against entity configurations. This works reliably unless two distinct entities have the exact same set of text-search columns
 
 ## Tests
 
