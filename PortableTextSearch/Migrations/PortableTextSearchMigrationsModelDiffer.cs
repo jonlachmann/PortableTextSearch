@@ -132,12 +132,7 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
                 continue;
             }
 
-            var keyProperty = entityType.FindPrimaryKey()?.Properties.SingleOrDefault();
-            var keyColumnName = keyProperty?.GetColumnName(storeObject);
-            if (keyProperty is null || string.IsNullOrWhiteSpace(keyColumnName))
-            {
-                continue;
-            }
+            var keyColumnName = GetKeyColumnName(entityType, storeObject);
 
             var key = new TextSearchTableKey(tableName, schema);
             if (configurations.TryGetValue(key, out var existing))
@@ -150,7 +145,7 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
                 tableName,
                 schema,
                 searchColumns,
-                keyColumnName!);
+                keyColumnName);
         }
 
         return configurations;
@@ -172,6 +167,7 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
                 Table = configuration.Table,
                 Columns = configuration.SearchColumns,
                 ContentKeyColumn = configuration.KeyColumnName
+                                   ?? throw new InvalidOperationException("SQLite text search requires a single-column primary key.")
             }],
             _ => []
         };
@@ -192,6 +188,7 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
                 Table = configuration.Table,
                 Columns = configuration.SearchColumns,
                 ContentKeyColumn = configuration.KeyColumnName
+                                   ?? throw new InvalidOperationException("SQLite text search requires a single-column primary key.")
             }],
             _ => []
         };
@@ -204,13 +201,37 @@ internal sealed class PortableTextSearchMigrationsModelDiffer(
            && string.Equals(left.KeyColumnName, right.KeyColumnName, StringComparison.Ordinal)
            && left.SearchColumns.SequenceEqual(right.SearchColumns, StringComparer.Ordinal);
 
+    private string? GetKeyColumnName(IEntityType entityType, StoreObjectIdentifier storeObject)
+    {
+        if (_databaseProvider.Name == ProviderNames.Npgsql)
+        {
+            return null;
+        }
+
+        var primaryKey = entityType.FindPrimaryKey();
+        if (primaryKey?.Properties.Count != 1)
+        {
+            throw new InvalidOperationException(
+                $"SQLite text search on entity '{entityType.DisplayName()}' requires a single-column primary key.");
+        }
+
+        var keyColumnName = primaryKey.Properties[0].GetColumnName(storeObject);
+        if (string.IsNullOrWhiteSpace(keyColumnName))
+        {
+            throw new InvalidOperationException(
+                $"SQLite text search on entity '{entityType.DisplayName()}' requires a mapped primary key column.");
+        }
+
+        return keyColumnName;
+    }
+
     private readonly record struct TextSearchTableKey(string Table, string? Schema);
 
     private sealed record TextSearchTableConfiguration(
         string Table,
         string? Schema,
         IReadOnlyList<string> SearchColumns,
-        string KeyColumnName)
+        string? KeyColumnName)
     {
         public TextSearchTableConfiguration Merge(IReadOnlyList<string> additionalColumns)
             => this with

@@ -208,16 +208,20 @@ internal static class SqliteTextContainsTranslator
                 continue;
             }
 
-            var keyProperty = entityType.FindPrimaryKey()?.Properties.SingleOrDefault();
-            if (keyProperty is null)
+            var primaryKey = entityType.FindPrimaryKey();
+            if (primaryKey?.Properties.Count != 1)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"SQLite text search on entity '{entityType.DisplayName()}' requires a single-column primary key.");
             }
+
+            var keyProperty = primaryKey.Properties[0];
 
             var keyColumnName = keyProperty.GetColumnName(storeObject);
             if (string.IsNullOrWhiteSpace(keyColumnName))
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"SQLite text search on entity '{entityType.DisplayName()}' requires a mapped primary key column.");
             }
 
             return new SqliteFtsSearchInfo(

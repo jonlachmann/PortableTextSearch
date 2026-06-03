@@ -219,7 +219,7 @@ These helpers emit SQL for:
 ### SQLite
 
 `TextContains(field, value, mode)` translates to an FTS5-backed `MATCH` query against a synchronized virtual table created by the SQLite migration helper.
-The SQLite implementation supports integer and Guid keys by storing the real entity key in an unindexed FTS column rather than relying on the FTS table's internal `rowid`.
+The SQLite implementation supports single-column integer and Guid keys by storing the real entity key in an unindexed FTS column rather than relying on the FTS table's internal `rowid`.
 
 PortableTextSearch now compiles SQLite `MATCH` input itself instead of passing raw user text through to FTS5 query syntax:
 
@@ -264,6 +264,7 @@ Current SQLite caveat:
 
 - query translation assumes the default virtual table naming convention used by `CreateSqliteTextSearchIndex(...)`
 - custom SQLite virtual table names are supported by the migration helper, but query translation is not yet model-configurable for custom names
+- SQLite text search currently requires a single-column primary key; composite keys are supported for PostgreSQL but not for the SQLite FTS path
 
 ## Tests
 

@@ -185,6 +185,21 @@ public sealed class PostgreSqlQueryTranslationTests
     }
 
     [Fact]
+    public void TextContains_parameterized_uses_format_not_concatenation()
+    {
+        using var context = CreateContext();
+
+        var searchTerm = "alice";
+        var sql = context.MessageRecipients
+            .Where(x => EF.Functions.TextContains(x.Email, searchTerm))
+            .ToQueryString();
+
+        sql.Should().Contain("ILIKE");
+        sql.Should().Contain("format(");
+        sql.Should().NotContain("|| '%'", "concatenation prevents GIN trigram index usage");
+    }
+
+    [Fact]
     public void TextContains_preserves_null_safe_sql_shape()
     {
         using var context = CreateContext();

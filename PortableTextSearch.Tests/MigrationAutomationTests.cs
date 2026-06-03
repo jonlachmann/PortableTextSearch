@@ -76,6 +76,20 @@ public sealed class MigrationAutomationTests
     }
 
     [Fact]
+    public void Postgres_model_diff_supports_composite_primary_keys()
+    {
+        using var sourceContext = CreatePostgresContext<PostgresWithoutTextSearchCompositeKeyContext>();
+        using var targetContext = CreatePostgresContext<PostgresWithTextSearchCompositeKeyContext>();
+
+        var operations = GetOperations(targetContext, sourceContext, targetContext);
+        operations.OfType<EnsurePostgresTrigramExtensionOperation>().Should().ContainSingle();
+        operations.OfType<CreatePostgresTextSearchIndexOperation>()
+            .Select(operation => operation.Column)
+            .Should()
+            .Equal("Email", "Name");
+    }
+
+    [Fact]
     public void Scaffolded_sqlite_migration_snapshot_preserves_text_search_annotation()
     {
         using var context = CreateSqliteContext<SqliteWithTextSearchContext>();
@@ -144,6 +158,19 @@ public sealed class MigrationAutomationTests
 
         createOperation.Table.Should().Be("GuidKeyRecipients");
         createOperation.ContentKeyColumn.Should().Be("Id");
+    }
+
+    [Fact]
+    public void Sqlite_model_diff_throws_clear_error_for_composite_primary_keys()
+    {
+        using var sourceContext = CreateSqliteContext<SqliteWithoutTextSearchCompositeKeyContext>();
+        using var targetContext = CreateSqliteContext<SqliteWithTextSearchCompositeKeyContext>();
+
+        var action = () => GetOperations(targetContext, sourceContext, targetContext);
+
+        action.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*single-column primary key*");
     }
 
     private static IReadOnlyList<MigrationOperation> GetOperations(
@@ -319,6 +346,38 @@ public sealed class MigrationAutomationTests
         }
     }
 
+    private sealed class PostgresWithoutTextSearchCompositeKeyContext(DbContextOptions<PostgresWithoutTextSearchCompositeKeyContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CompositeKeyMessageRecipient>(builder =>
+            {
+                builder.ToTable("CompositeKeyRecipients");
+                builder.HasKey(x => new { x.Id, x.Partition });
+                builder.Property(x => x.Partition).HasMaxLength(64);
+                builder.Property(x => x.Email).HasMaxLength(256);
+                builder.Property(x => x.Name).HasMaxLength(256);
+            });
+        }
+    }
+
+    private sealed class PostgresWithTextSearchCompositeKeyContext(DbContextOptions<PostgresWithTextSearchCompositeKeyContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CompositeKeyMessageRecipient>(builder =>
+            {
+                builder.ToTable("CompositeKeyRecipients");
+                builder.HasKey(x => new { x.Id, x.Partition });
+                builder.Property(x => x.Partition).HasMaxLength(64);
+                builder.Property(x => x.Email).HasMaxLength(256);
+                builder.Property(x => x.Name).HasMaxLength(256);
+                builder.HasTextSearch(x => x.Email)
+                    .HasTextSearch(x => x.Name);
+            });
+        }
+    }
+
     private sealed class SqliteWithoutTextSearchGuidKeyContext(DbContextOptions<SqliteWithoutTextSearchGuidKeyContext> options) : DbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -346,10 +405,53 @@ public sealed class MigrationAutomationTests
         }
     }
 
+    private sealed class SqliteWithoutTextSearchCompositeKeyContext(DbContextOptions<SqliteWithoutTextSearchCompositeKeyContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CompositeKeyMessageRecipient>(builder =>
+            {
+                builder.ToTable("CompositeKeyRecipients");
+                builder.HasKey(x => new { x.Id, x.Partition });
+                builder.Property(x => x.Partition).HasMaxLength(64);
+                builder.Property(x => x.Email).HasMaxLength(256);
+                builder.Property(x => x.Name).HasMaxLength(256);
+            });
+        }
+    }
+
+    private sealed class SqliteWithTextSearchCompositeKeyContext(DbContextOptions<SqliteWithTextSearchCompositeKeyContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CompositeKeyMessageRecipient>(builder =>
+            {
+                builder.ToTable("CompositeKeyRecipients");
+                builder.HasKey(x => new { x.Id, x.Partition });
+                builder.Property(x => x.Partition).HasMaxLength(64);
+                builder.Property(x => x.Email).HasMaxLength(256);
+                builder.Property(x => x.Name).HasMaxLength(256);
+                builder.HasTextSearch(x => x.Email)
+                    .HasTextSearch(x => x.Name);
+            });
+        }
+    }
+
     private sealed class GuidKeyMessageRecipient
     {
         public Guid Id { get; init; }
 
         public string? Email { get; init; }
+    }
+
+    private sealed class CompositeKeyMessageRecipient
+    {
+        public Guid Id { get; init; }
+
+        public string Partition { get; init; } = null!;
+
+        public string? Email { get; init; }
+
+        public string? Name { get; init; }
     }
 }

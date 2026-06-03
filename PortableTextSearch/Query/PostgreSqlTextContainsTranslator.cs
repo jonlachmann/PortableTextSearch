@@ -72,10 +72,19 @@ internal static class PostgreSqlTextContainsTranslator
         }
 
         var stringMapping = field.TypeMapping ?? value.TypeMapping ?? typeMappingSource.FindMapping(typeof(string));
-        var percent = sqlExpressionFactory.Constant("%", stringMapping);
-        var pattern = sqlExpressionFactory.Add(
-            sqlExpressionFactory.Add(percent, sqlExpressionFactory.ApplyTypeMapping(value, stringMapping), stringMapping),
-            percent,
+
+        // Use format() to build the pattern so PostgreSQL sees a single parameter
+        // and can use GIN trigram indexes. SQL concatenation ('% '|| @p || '%')
+        // prevents the query planner from choosing the index.
+        var pattern = sqlExpressionFactory.Function(
+            "format",
+            [
+                sqlExpressionFactory.Constant("%%%s%%", stringMapping),
+                sqlExpressionFactory.ApplyTypeMapping(value, stringMapping)
+            ],
+            nullable: true,
+            argumentsPropagateNullability: [false, true],
+            typeof(string),
             stringMapping);
 
         return npgsqlSqlExpressionFactory.ILike(
